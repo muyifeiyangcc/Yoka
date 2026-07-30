@@ -5,6 +5,16 @@
 
 #import "YKSignInViewController.h"
 #import "YKForgetPasswordViewController.h"
+#import "YKAccountVault.h"
+#import "YKBootNavigator.h"
+#import "../../BaseClass/YKCenterToast.h"
+
+@interface YKSignInViewController ()
+
+@property (nonatomic, strong) UITextField *yk_emailField;
+@property (nonatomic, strong) UITextField *yk_passwordField;
+
+@end
 
 @implementation YKSignInViewController
 
@@ -23,8 +33,15 @@
 
     UIImageView *emailLabel = [self yk_authFieldTitleImageViewWithName:@"Emailword"];
     UITextField *emailTextField = [self yk_authTextFieldWithPlaceholder:@"Email" secure:NO];
+    emailTextField.keyboardType = UIKeyboardTypeEmailAddress;
+    emailTextField.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    emailTextField.autocorrectionType = UITextAutocorrectionTypeNo;
+    self.yk_emailField = emailTextField;
+
     UIImageView *passwordLabel = [self yk_authFieldTitleImageViewWithName:@"Passwordword"];
     UITextField *passwordTextField = [self yk_authTextFieldWithPlaceholder:@"Password" secure:YES];
+    self.yk_passwordField = passwordTextField;
+
     [self.view addSubview:emailLabel];
     [self.view addSubview:emailTextField];
     [self.view addSubview:passwordLabel];
@@ -82,7 +99,21 @@
 }
 
 - (void)yk_loginButtonTapped:(UIButton *)sender {
-    [self yk_enterMainInterface];
+    [self.view endEditing:YES];
+    __weak typeof(self) weakSelf = self;
+    [YKCenterToast yk_showLoadingInView:self.view performAfterDelay:0.55 work:^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) { return; }
+        NSString *error = nil;
+        BOOL ok = [[YKAccountVault sharedVault] yk_openMailboxSessionWithEmail:self.yk_emailField.text
+                                                                       secret:self.yk_passwordField.text
+                                                                 errorMessage:&error];
+        if (!ok) {
+            [YKCenterToast yk_showNotice:error ?: @"Login failed" inView:self.view];
+            return;
+        }
+        [YKBootNavigator yk_advanceAfterAuthFrom:self.navigationController];
+    }];
 }
 
 @end

@@ -9,7 +9,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface YKFindDetailViewController : YKBaseViewController
 
-- (instancetype)initWithUserName:(NSString *)userName;
+- (instancetype)initWithEntry:(NSDictionary *)post;
+- (instancetype)initWithDisplayAlias:(NSString *)userName;
 - (instancetype)init NS_UNAVAILABLE;
 - (instancetype)initWithCoder:(NSCoder *)coder NS_UNAVAILABLE;
 

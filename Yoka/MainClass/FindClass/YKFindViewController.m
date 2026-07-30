@@ -5,6 +5,19 @@
 
 #import "YKFindViewController.h"
 #import "YKFindDetailViewController.h"
+#import "YKOutfitFeedCatalog.h"
+#import "YKFindFavorLedger.h"
+#import "YKPublishLedger.h"
+#import "../LoginandReClass/YKPersonaCatalog.h"
+#import "../LoginandReClass/YKAccountVault.h"
+#import "../LoginandReClass/YKBondLedger.h"
+#import "../RelayClass/YKShadeRoster.h"
+#import "../RelayClass/YKReportShadeSheet.h"
+#import "../RelayClass/YKReportViewController.h"
+#import "../../BaseClass/YKEmptyStateView.h"
+#import "../../BaseClass/YKCenterToast.h"
+#import <AVFoundation/AVFoundation.h>
+#import "../../BaseClass/YKSigilForge.h"
 
 @interface YKFindSegmentButton : UIControl
 
@@ -246,18 +259,24 @@
 
 @interface YKFindDiscoverCell : UICollectionViewCell
 
-- (void)configureWithName:(NSString *)name color:(UIColor *)color;
+@property (nonatomic, copy, nullable) void (^yk_moreTapHandler)(NSDictionary *entry);
+
+- (void)configureWithEntry:(NSDictionary *)post ownerKey:(NSString *)ownerKey;
 
 @end
 
 @interface YKFindDiscoverCell ()
 
+@property (nonatomic, strong) UIImageView *coverImageView;
 @property (nonatomic, strong) CAGradientLayer *overlayLayer;
 @property (nonatomic, strong) UIImageView *avatarImageView;
 @property (nonatomic, strong) UILabel *nameLabel;
 @property (nonatomic, strong) UILabel *descLabel;
-@property (nonatomic, strong) UILabel *heartLabel;
+@property (nonatomic, strong) UIButton *favorButton;
 @property (nonatomic, strong) UIButton *moreButton;
+@property (nonatomic, copy) NSDictionary *yk_entry;
+@property (nonatomic, copy) NSString *yk_ownerKey;
+@property (nonatomic, copy) NSString *yk_videoToken;
 
 @end
 
@@ -274,6 +293,14 @@
 - (void)yk_setupViews {
     self.contentView.layer.cornerRadius = 12.0;
     self.contentView.layer.masksToBounds = YES;
+    self.contentView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.12];
+
+    UIImageView *coverImageView = [[UIImageView alloc] init];
+    coverImageView.translatesAutoresizingMaskIntoConstraints = NO;
+    coverImageView.contentMode = UIViewContentModeScaleAspectFill;
+    coverImageView.clipsToBounds = YES;
+    [self.contentView addSubview:coverImageView];
+    self.coverImageView = coverImageView;
 
     CAGradientLayer *overlayLayer = [CAGradientLayer layer];
     overlayLayer.colors = @[
@@ -287,11 +314,13 @@
     UIButton *moreButton = [UIButton buttonWithType:UIButtonTypeCustom];
     moreButton.translatesAutoresizingMaskIntoConstraints = NO;
     [moreButton setImage:[[UIImage imageNamed:@"nav_more"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forState:UIControlStateNormal];
+    [moreButton addTarget:self action:@selector(yk_moreTapped:) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:moreButton];
     self.moreButton = moreButton;
 
     UIImageView *avatarImageView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"headplace"]];
     avatarImageView.translatesAutoresizingMaskIntoConstraints = NO;
+    avatarImageView.contentMode = UIViewContentModeScaleAspectFill;
     avatarImageView.layer.cornerRadius = 10.0;
     avatarImageView.layer.masksToBounds = YES;
     [self.contentView addSubview:avatarImageView];
@@ -306,25 +335,26 @@
 
     UILabel *descLabel = [[UILabel alloc] init];
     descLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    descLabel.text = @"Feeling this look...";
     descLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.82];
     descLabel.font = [UIFont systemFontOfSize:10.0 weight:UIFontWeightRegular];
+    descLabel.numberOfLines = 2;
     [self.contentView addSubview:descLabel];
     self.descLabel = descLabel;
 
-    UILabel *heartLabel = [[UILabel alloc] init];
-    heartLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    heartLabel.text = @"+";
-    heartLabel.textAlignment = NSTextAlignmentCenter;
-    heartLabel.textColor = [UIColor colorWithRed:1.0 green:0.0 blue:242.0 / 255.0 alpha:1.0];
-    heartLabel.backgroundColor = UIColor.whiteColor;
-    heartLabel.font = [UIFont systemFontOfSize:13.0 weight:UIFontWeightBlack];
-    heartLabel.layer.cornerRadius = 12.0;
-    heartLabel.layer.masksToBounds = YES;
-    [self.contentView addSubview:heartLabel];
-    self.heartLabel = heartLabel;
+    UIButton *favorBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+    favorBtn.translatesAutoresizingMaskIntoConstraints = NO;
+    favorBtn.backgroundColor = UIColor.clearColor;
+    favorBtn.imageView.contentMode = UIViewContentModeScaleAspectFit;
+    [favorBtn addTarget:self action:@selector(yk_favorTapped:) forControlEvents:UIControlEventTouchUpInside];
+    [self.contentView addSubview:favorBtn];
+    self.favorButton = favorBtn;
 
     [NSLayoutConstraint activateConstraints:@[
+        [coverImageView.topAnchor constraintEqualToAnchor:self.contentView.topAnchor],
+        [coverImageView.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
+        [coverImageView.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
+        [coverImageView.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor],
+
         [moreButton.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:8.0],
         [moreButton.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-8.0],
         [moreButton.widthAnchor constraintEqualToConstant:28.0],
@@ -336,17 +366,17 @@
         [avatarImageView.heightAnchor constraintEqualToConstant:20.0],
 
         [nameLabel.leadingAnchor constraintEqualToAnchor:avatarImageView.trailingAnchor constant:5.0],
-        [nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:heartLabel.leadingAnchor constant:-8.0],
+        [nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:favorBtn.leadingAnchor constant:-8.0],
         [nameLabel.bottomAnchor constraintEqualToAnchor:descLabel.topAnchor constant:-2.0],
 
         [descLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor constant:10.0],
-        [descLabel.trailingAnchor constraintLessThanOrEqualToAnchor:heartLabel.leadingAnchor constant:-8.0],
+        [descLabel.trailingAnchor constraintLessThanOrEqualToAnchor:favorBtn.leadingAnchor constant:-8.0],
         [descLabel.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-12.0],
 
-        [heartLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-8.0],
-        [heartLabel.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-8.0],
-        [heartLabel.widthAnchor constraintEqualToConstant:24.0],
-        [heartLabel.heightAnchor constraintEqualToConstant:24.0]
+        [favorBtn.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-8.0],
+        [favorBtn.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-8.0],
+        [favorBtn.widthAnchor constraintEqualToConstant:24.0],
+        [favorBtn.heightAnchor constraintEqualToConstant:24.0]
     ]];
 }
 
@@ -358,12 +388,105 @@
 - (void)prepareForReuse {
     [super prepareForReuse];
     self.nameLabel.text = nil;
-    self.contentView.backgroundColor = UIColor.clearColor;
+    self.descLabel.text = nil;
+    self.coverImageView.image = nil;
+    self.yk_videoToken = nil;
+    self.yk_entry = nil;
+    self.yk_ownerKey = nil;
+    self.yk_moreTapHandler = nil;
+    self.moreButton.hidden = NO;
+    self.avatarImageView.image = [UIImage imageNamed:@"headplace"];
 }
 
-- (void)configureWithName:(NSString *)name color:(UIColor *)color {
-    self.nameLabel.text = name;
-    self.contentView.backgroundColor = color;
+- (void)yk_moreTapped:(UIButton *)sender {
+    if (self.yk_moreTapHandler && self.yk_entry) {
+        self.yk_moreTapHandler(self.yk_entry);
+    }
+}
+
+- (void)yk_refreshFavorAppearance {
+    YKFindFavorLedger *ledger = [YKFindFavorLedger sharedLedger];
+    BOOL favored = [ledger yk_isEntryFavored:self.yk_entry ?: @{} ownerKey:self.yk_ownerKey ?: @""];
+    NSString *iconName = favored ? [ledger yk_favoredStarImageName] : [ledger yk_unfavoredStarImageName];
+    [self.favorButton setImage:[[UIImage imageNamed:iconName] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal]
+                     forState:UIControlStateNormal];
+}
+
+- (void)yk_favorTapped:(UIButton *)sender {
+    if (!self.yk_entry || self.yk_ownerKey.length == 0) {
+        return;
+    }
+    YKFindFavorLedger *ledger = [YKFindFavorLedger sharedLedger];
+    BOOL favored = [ledger yk_isEntryFavored:self.yk_entry ownerKey:self.yk_ownerKey];
+    [ledger yk_setEntry:self.yk_entry favored:!favored ownerKey:self.yk_ownerKey];
+    [self yk_refreshFavorAppearance];
+}
+
+- (void)configureWithEntry:(NSDictionary *)post ownerKey:(NSString *)ownerKey {
+    self.yk_entry = post;
+    self.yk_ownerKey = ownerKey;
+    [self yk_refreshFavorAppearance];
+
+    NSString *personaId = post[@"personaId"];
+    BOOL isOwn = [post[@"isMine"] boolValue] ||
+        ([personaId isKindOfClass:NSString.class] && personaId.length > 0 && [personaId isEqualToString:ownerKey]);
+    self.moreButton.hidden = isOwn;
+    self.nameLabel.text = post[@"name"];
+    self.descLabel.text = post[@"caption"];
+    UIImage *avatar = [YKPersonaCatalog yk_avatarImageForPersonaId:personaId];
+    if (!avatar && [personaId isKindOfClass:NSString.class] && [personaId isEqualToString:ownerKey]) {
+        avatar = [[YKAccountVault sharedVault] yk_portraitImageForActiveMailbox];
+    }
+    if (avatar) {
+        self.avatarImageView.image = [avatar imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    } else if (isOwn) {
+        UIImage *mine = [[YKAccountVault sharedVault] yk_portraitImageForActiveMailbox];
+        self.avatarImageView.image = [(mine ?: [UIImage imageNamed:@"headplace"]) imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+    }
+
+    NSString *videoName = post[@"video"];
+    NSString *imageName = post[@"image"];
+    self.yk_videoToken = videoName.length > 0 ? videoName : (imageName ?: @"");
+    self.coverImageView.image = nil;
+
+    if (imageName.length > 0 && videoName.length == 0) {
+        self.coverImageView.image = [[UIImage imageNamed:imageName] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+        return;
+    }
+
+    UIImage *fileCover = [YKPublishLedger yk_coverImageForEntry:post];
+    if (fileCover && videoName.length == 0) {
+        self.coverImageView.image = [fileCover imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+        return;
+    }
+
+    if (videoName.length == 0) {
+        return;
+    }
+    NSURL *url = [[NSBundle mainBundle] URLForResource:videoName withExtension:@"mp4"];
+    if (!url) {
+        return;
+    }
+    NSString *token = videoName;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        AVAsset *asset = [AVAsset assetWithURL:url];
+        AVAssetImageGenerator *generator = [AVAssetImageGenerator assetImageGeneratorWithAsset:asset];
+        generator.appliesPreferredTrackTransform = YES;
+        generator.maximumSize = CGSizeMake(600.0, 900.0);
+        NSError *error = nil;
+        CGImageRef cgImage = [generator copyCGImageAtTime:CMTimeMake(1, 2) actualTime:NULL error:&error];
+        if (!cgImage) {
+            return;
+        }
+        UIImage *thumb = [UIImage imageWithCGImage:cgImage];
+        CGImageRelease(cgImage);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (![self.yk_videoToken isEqualToString:token]) {
+                return;
+            }
+            self.coverImageView.image = thumb;
+        });
+    });
 }
 
 @end
@@ -380,8 +503,14 @@
 @property (nonatomic, strong) NSLayoutConstraint *tabUnderlineWidthConstraint;
 @property (nonatomic, strong) UIScrollView *contentScrollView;
 @property (nonatomic, strong) NSMutableArray<UICollectionView *> *collectionViews;
-@property (nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *discoverItems;
+@property (nonatomic, strong) NSMutableArray<YKEmptyStateView *> *yk_emptyViews;
+@property (nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *outfitItems;
+@property (nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *makeupItems;
+@property (nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *hairItems;
+@property (nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *jewelryItems;
+@property (nonatomic, copy) NSArray<NSDictionary<NSString *, id> *> *shoesItems;
 @property (nonatomic, assign) NSInteger selectedContentIndex;
+@property (nonatomic, copy) NSString *yk_actionPeerId;
 
 @end
 
@@ -393,13 +522,58 @@
     self.categoryTitles = @[@"Outfit", @"Makeup", @"Hair", @"Jewelry", @"Shoes"];
     self.segmentButtons = [NSMutableArray arrayWithCapacity:self.categoryTitles.count];
     self.collectionViews = [NSMutableArray arrayWithCapacity:self.categoryTitles.count];
-    self.discoverItems = [self yk_makeDiscoverItems];
+    self.yk_emptyViews = [NSMutableArray arrayWithCapacity:self.categoryTitles.count];
     self.selectedContentIndex = 0;
 
+    [self yk_reloadFeedExcludingBlocked];
     [self yk_setupHeaderView];
     [self yk_setupSegmentTabs];
     [self yk_setupContentScrollView];
     [self yk_updateSegmentSelectionAnimated:NO];
+    [self yk_updateFindEmptyStates];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    [self yk_reloadFeedExcludingBlocked];
+    for (UICollectionView *collectionView in self.collectionViews) {
+        [collectionView reloadData];
+        [collectionView.collectionViewLayout invalidateLayout];
+    }
+    [self yk_updateFindEmptyStates];
+}
+
+- (NSString *)yk_ownerKey {
+    YKAccountVault *vault = [YKAccountVault sharedVault];
+    if ([YKAccountVault yk_isReviewMailbox:vault.yk_activeMailbox ?: @""]) {
+        return [YKPersonaCatalog yk_reviewPersonaId];
+    }
+    return vault.yk_activeMailbox.length > 0 ? vault.yk_activeMailbox : @"guest";
+}
+
+- (NSArray<NSDictionary *> *)yk_filterBlockedFromPosts:(NSArray<NSDictionary *> *)posts {
+    NSString *owner = [self yk_ownerKey];
+    NSMutableArray *filtered = [NSMutableArray array];
+    for (NSDictionary *entry in posts) {
+        NSString *personaId = entry[@"personaId"];
+        if ([personaId isKindOfClass:NSString.class] &&
+            [[YKShadeRoster sharedRoster] yk_ownerKey:owner hasShadedId:personaId]) {
+            continue;
+        }
+        [filtered addObject:entry];
+    }
+    return filtered;
+}
+
+- (void)yk_reloadFeedExcludingBlocked {
+    NSMutableArray *outfit = [NSMutableArray array];
+    [outfit addObjectsFromArray:[[YKPublishLedger sharedLedger] yk_allPublishedEntries]];
+    [outfit addObjectsFromArray:[YKOutfitFeedCatalog yk_outfitPosts]];
+    self.outfitItems = [self yk_filterBlockedFromPosts:outfit];
+    self.makeupItems = [self yk_filterBlockedFromPosts:[YKOutfitFeedCatalog yk_makeupPosts]];
+    self.hairItems = [self yk_filterBlockedFromPosts:[YKOutfitFeedCatalog yk_hairPosts]];
+    self.jewelryItems = [self yk_filterBlockedFromPosts:[YKOutfitFeedCatalog yk_jewelryPosts]];
+    self.shoesItems = [self yk_filterBlockedFromPosts:[YKOutfitFeedCatalog yk_shoesPosts]];
 }
 
 - (void)viewDidLayoutSubviews {
@@ -416,22 +590,11 @@
     titleImageView.contentMode = UIViewContentModeScaleAspectFit;
     [self.view addSubview:titleImageView];
 
-    UIButton *moreButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    moreButton.translatesAutoresizingMaskIntoConstraints = NO;
-    [moreButton setImage:[[UIImage imageNamed:@"nav_more"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forState:UIControlStateNormal];
-    [self.view addSubview:moreButton];
-
     [NSLayoutConstraint activateConstraints:@[
         [titleImageView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:24.0],
         [titleImageView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:28.0],
-        [titleImageView.trailingAnchor constraintLessThanOrEqualToAnchor:moreButton.leadingAnchor constant:-12.0],
         [titleImageView.widthAnchor constraintEqualToConstant:108.0],
-        [titleImageView.heightAnchor constraintEqualToConstant:30.0],
-
-        [moreButton.centerYAnchor constraintEqualToAnchor:titleImageView.centerYAnchor],
-        [moreButton.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-26.0],
-        [moreButton.widthAnchor constraintEqualToConstant:32.0],
-        [moreButton.heightAnchor constraintEqualToConstant:32.0]
+        [titleImageView.heightAnchor constraintEqualToConstant:30.0]
     ]];
 }
 
@@ -565,6 +728,10 @@
 }
 
 - (UIView *)yk_categoryPageViewWithIndex:(NSInteger)index {
+    UIView *pageView = [[UIView alloc] init];
+    pageView.translatesAutoresizingMaskIntoConstraints = NO;
+    pageView.backgroundColor = UIColor.clearColor;
+
     YKFindWaterfallLayout *layout = [[YKFindWaterfallLayout alloc] init];
     layout.delegate = self;
     layout.columnCount = 2;
@@ -582,8 +749,34 @@
     collectionView.tag = index;
     collectionView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     [collectionView registerClass:YKFindDiscoverCell.class forCellWithReuseIdentifier:@"YKFindDiscoverCell"];
+    [pageView addSubview:collectionView];
     [self.collectionViews addObject:collectionView];
-    return collectionView;
+
+    YKEmptyStateView *emptyView = [[YKEmptyStateView alloc] init];
+    [pageView addSubview:emptyView];
+    [self.yk_emptyViews addObject:emptyView];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [collectionView.topAnchor constraintEqualToAnchor:pageView.topAnchor],
+        [collectionView.leadingAnchor constraintEqualToAnchor:pageView.leadingAnchor],
+        [collectionView.trailingAnchor constraintEqualToAnchor:pageView.trailingAnchor],
+        [collectionView.bottomAnchor constraintEqualToAnchor:pageView.bottomAnchor],
+
+        [emptyView.centerXAnchor constraintEqualToAnchor:pageView.centerXAnchor],
+        [emptyView.centerYAnchor constraintEqualToAnchor:pageView.centerYAnchor constant:-24.0],
+        [emptyView.widthAnchor constraintEqualToConstant:200.0]
+    ]];
+    return pageView;
+}
+
+- (void)yk_updateFindEmptyStates {
+    for (NSInteger index = 0; index < (NSInteger)self.yk_emptyViews.count; index++) {
+        BOOL empty = [self yk_itemsForCollectionTag:index].count == 0;
+        self.yk_emptyViews[index].hidden = !empty;
+        if (index < (NSInteger)self.collectionViews.count) {
+            self.collectionViews[index].hidden = empty;
+        }
+    }
 }
 
 - (void)yk_segmentButtonTapped:(YKFindSegmentButton *)sender {
@@ -667,56 +860,101 @@
     }
 }
 
-- (NSArray<NSDictionary<NSString *, id> *> *)yk_makeDiscoverItems {
-    NSArray<NSString *> *names = @[@"Freya", @"Lumi", @"Alina", @"Bodhi", @"Amelia", @"Stellan"];
-    NSArray<UIColor *> *colors = @[
-        [UIColor colorWithRed:0.38 green:0.32 blue:0.58 alpha:1.0],
-        [UIColor colorWithRed:0.58 green:0.20 blue:0.28 alpha:1.0],
-        [UIColor colorWithRed:0.20 green:0.16 blue:0.24 alpha:1.0],
-        [UIColor colorWithRed:0.47 green:0.64 blue:0.82 alpha:1.0],
-        [UIColor colorWithRed:0.52 green:0.34 blue:0.22 alpha:1.0],
-        [UIColor colorWithRed:0.18 green:0.18 blue:0.28 alpha:1.0]
-    ];
-    NSArray<NSNumber *> *heightRatios = @[@1.38, @1.05, @1.45, @1.28, @1.18, @1.36, @1.52, @1.12, @1.32, @1.24];
-
-    NSMutableArray<NSDictionary<NSString *, id> *> *items = [NSMutableArray arrayWithCapacity:30];
-    for (NSInteger index = 0; index < 30; index++) {
-        [items addObject:@{
-            @"name": names[index % names.count],
-            @"color": colors[index % colors.count],
-            @"ratio": heightRatios[index % heightRatios.count]
-        }];
+- (NSArray<NSDictionary<NSString *, id> *> *)yk_itemsForCollectionTag:(NSInteger)tag {
+    if (tag == 0) {
+        return self.outfitItems;
     }
-    return items;
+    if (tag == 1) {
+        return self.makeupItems;
+    }
+    if (tag == 2) {
+        return self.hairItems;
+    }
+    if (tag == 3) {
+        return self.jewelryItems;
+    }
+    if (tag == 4) {
+        return self.shoesItems;
+    }
+    return @[];
 }
 
 - (NSDictionary<NSString *, id> *)yk_itemForCollectionView:(UICollectionView *)collectionView indexPath:(NSIndexPath *)indexPath {
-    NSInteger offset = collectionView.tag * 3;
-    NSInteger itemIndex = (indexPath.item + offset) % self.discoverItems.count;
-    return self.discoverItems[itemIndex];
+    NSArray *items = [self yk_itemsForCollectionTag:collectionView.tag];
+    if (indexPath.item < 0 || indexPath.item >= (NSInteger)items.count) {
+        return @{};
+    }
+    return items[indexPath.item];
 }
 
 - (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section {
-    return self.discoverItems.count;
+    return [self yk_itemsForCollectionTag:collectionView.tag].count;
 }
 
 - (__kindof UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath {
     YKFindDiscoverCell *cell = [collectionView dequeueReusableCellWithReuseIdentifier:@"YKFindDiscoverCell" forIndexPath:indexPath];
     NSDictionary<NSString *, id> *item = [self yk_itemForCollectionView:collectionView indexPath:indexPath];
-    [cell configureWithName:item[@"name"] color:item[@"color"]];
+    [cell configureWithEntry:item ownerKey:[self yk_ownerKey]];
+    __weak typeof(self) weakSelf = self;
+    cell.yk_moreTapHandler = ^(NSDictionary *entry) {
+        [weakSelf yk_moreTappedForPost:entry];
+    };
     return cell;
+}
+
+- (void)yk_moreTappedForPost:(NSDictionary *)post {
+    NSString *peerId = [post[@"personaId"] isKindOfClass:NSString.class] ? post[@"personaId"] : @"";
+    if (peerId.length == 0) {
+        return;
+    }
+    NSString *owner = [self yk_ownerKey];
+    if ([post[@"isMine"] boolValue] || [peerId isEqualToString:owner]) {
+        return;
+    }
+    self.yk_actionPeerId = peerId;
+    __weak typeof(self) weakSelf = self;
+    [YKReportShadeSheet yk_presentInView:self.view
+                                  report:^{
+        YKReportViewController *report = [[YKReportViewController alloc] initWithPersonaId:weakSelf.yk_actionPeerId];
+        [weakSelf.navigationController pushViewController:report animated:YES];
+    }
+                                   block:^{
+        [weakSelf yk_blockPeer:weakSelf.yk_actionPeerId];
+    }];
+}
+
+- (void)yk_blockPeer:(NSString *)peerId {
+    if (peerId.length == 0) {
+        return;
+    }
+    NSString *owner = [self yk_ownerKey];
+    if ([peerId isEqualToString:owner]) {
+        return;
+    }
+    [[YKShadeRoster sharedRoster] yk_ownerKey:owner shadeId:peerId];
+    [[YKBondLedger sharedLedger] yk_ownerKey:owner setLink:peerId on:NO];
+    [YKCenterToast yk_showNotice:[YKSigilForge yk_unveil:@"gXSk12fDfGwMlYIIaZYBKg=="] inView:self.view];
+    [self yk_reloadFeedExcludingBlocked];
+    for (UICollectionView *collectionView in self.collectionViews) {
+        [collectionView reloadData];
+        [collectionView.collectionViewLayout invalidateLayout];
+    }
+    [self yk_updateFindEmptyStates];
 }
 
 - (CGFloat)waterfallLayout:(YKFindWaterfallLayout *)layout heightForItemAtIndexPath:(NSIndexPath *)indexPath itemWidth:(CGFloat)itemWidth {
     UICollectionView *collectionView = layout.collectionView;
     NSDictionary<NSString *, id> *item = [self yk_itemForCollectionView:collectionView indexPath:indexPath];
-    NSNumber *ratio = item[@"ratio"];
+    NSNumber *ratio = item[@"ratio"] ?: @1.3;
     return floor(itemWidth * ratio.doubleValue);
 }
 
 - (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     NSDictionary<NSString *, id> *item = [self yk_itemForCollectionView:collectionView indexPath:indexPath];
-    YKFindDetailViewController *detailViewController = [[YKFindDetailViewController alloc] initWithUserName:item[@"name"]];
+    if (item.count == 0) {
+        return;
+    }
+    YKFindDetailViewController *detailViewController = [[YKFindDetailViewController alloc] initWithEntry:item];
     [self.navigationController pushViewController:detailViewController animated:YES];
 }
 

@@ -4,6 +4,16 @@
 //
 
 #import "YKForgetPasswordViewController.h"
+#import "YKAccountVault.h"
+#import "../../BaseClass/YKCenterToast.h"
+
+@interface YKForgetPasswordViewController ()
+
+@property (nonatomic, strong) UITextField *yk_emailField;
+@property (nonatomic, strong) UITextField *yk_passwordField;
+@property (nonatomic, strong) UITextField *yk_confirmField;
+
+@end
 
 @implementation YKForgetPasswordViewController
 
@@ -22,10 +32,19 @@
 
     UIImageView *emailLabel = [self yk_authFieldTitleImageViewWithName:@"Emailword"];
     UITextField *emailTextField = [self yk_authTextFieldWithPlaceholder:@"Email" secure:NO];
+    emailTextField.keyboardType = UIKeyboardTypeEmailAddress;
+    emailTextField.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    emailTextField.autocorrectionType = UITextAutocorrectionTypeNo;
+    self.yk_emailField = emailTextField;
+
     UIImageView *passwordLabel = [self yk_authFieldTitleImageViewWithName:@"Passwordword"];
     UITextField *passwordTextField = [self yk_authTextFieldWithPlaceholder:@"Password" secure:YES];
+    self.yk_passwordField = passwordTextField;
+
     UIImageView *confirmLabel = [self yk_authFieldTitleImageViewWithName:@"Passwordword"];
     UITextField *confirmTextField = [self yk_authTextFieldWithPlaceholder:@"Enter the password again" secure:YES];
+    self.yk_confirmField = confirmTextField;
+
     [self.view addSubview:emailLabel];
     [self.view addSubview:emailTextField];
     [self.view addSubview:passwordLabel];
@@ -78,7 +97,30 @@
 }
 
 - (void)yk_saveButtonTapped:(UIButton *)sender {
-    [self.navigationController popViewControllerAnimated:YES];
+    [self.view endEditing:YES];
+    NSString *password = self.yk_passwordField.text ?: @"";
+    NSString *confirm = self.yk_confirmField.text ?: @"";
+    if (![password isEqualToString:confirm]) {
+        [YKCenterToast yk_showNotice:@"Passwords do not match" inView:self.view];
+        return;
+    }
+    __weak typeof(self) weakSelf = self;
+    [YKCenterToast yk_showLoadingInView:self.view performAfterDelay:0.55 work:^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) { return; }
+        NSString *error = nil;
+        BOOL ok = [[YKAccountVault sharedVault] yk_replaceSecretForMailbox:self.yk_emailField.text
+                                                                   secret:password
+                                                             errorMessage:&error];
+        if (!ok) {
+            [YKCenterToast yk_showNotice:error ?: @"Save failed" inView:self.view];
+            return;
+        }
+        [YKCenterToast yk_showNotice:@"Password updated" inView:self.view];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self.navigationController popViewControllerAnimated:YES];
+        });
+    }];
 }
 
 @end

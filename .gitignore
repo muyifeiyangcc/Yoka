@@ -1,0 +1,37 @@
+# Secrets — never commit
+fastlane/.env
+fastlane/.env.local
+AuthKey_*.p8
+*.p8
+*.mobileprovision
+*.cer
+*.certSigningRequest
+*.p12
+
+# Xcode / build
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Ruby / fastlane
+vendor/bundle/
+.bundle/
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
+
+# Nested Website git (proxy site — own repo)
+Website/
+
+# OS / IDE
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/
+*.swp
+.kiro/

@@ -5,6 +5,7 @@
 
 #import "YKCustomTabBarView.h"
 #import "YKCustomTabBarItem.h"
+#import "YKSigilForge.h"
 
 @interface YKCustomTabBarView ()
 
@@ -67,7 +68,7 @@
     NSArray<NSDictionary<NSString *, NSString *> *> *configs = @[
         @{@"normal": @"tab_home_normal", @"selected": @"tab_home_selected", @"title": @"Home"},
         @{@"normal": @"tab_discover_normal", @"selected": @"tab_discover_selected", @"title": @"Discover"},
-        @{@"normal": @"tab_message_normal", @"selected": @"tab_message_selected", @"title": @"Message"},
+        @{@"normal": @"tab_inbox_normal", @"selected": @"tab_inbox_selected", @"title": [YKSigilForge yk_unveil:@"EIDKmIiJFebfyrc8Gz4XSg=="]},
         @{@"normal": @"tab_mine_normal", @"selected": @"tab_mine_selected", @"title": @"Mine"}
     ];
 

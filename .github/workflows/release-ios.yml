@@ -1,0 +1,63 @@
+# GitHub Actions + GetMac → Fastlane → App Store / TestFlight
+name: Release iOS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-upload:
+    name: Fastlane release
+    runs-on: getmac-latest # GetMac: getmac / getmac-latest / getmac-tahoe
+
+    env:
+      FL_OUTPUT_DIR: build
+      LC_ALL: en_US.UTF-8
+      LANG: en_US.UTF-8
+      FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: "120"
+      FASTLANE_USER: ${{ secrets.FASTLANE_USER }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+      TEAM_ID: ${{ secrets.TEAM_ID }}
+      BUNDLE_ID: ${{ secrets.BUNDLE_ID }}
+      SCHEME: ${{ secrets.SCHEME }}
+      APP_NAME: ${{ secrets.APP_NAME }}
+      EXPORT_METHOD: ${{ secrets.EXPORT_METHOD }}
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+      # Optional (omit if unused):
+      # pgy_api_key: ${{ secrets.PGY_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode
+        run: xcodebuild -version
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Install gems
+        run: |
+          bundle config set path 'vendor/bundle'
+          bundle install
+
+      - name: Run Fastlane release
+        run: bundle exec fastlane release
+
+      - name: Upload IPA artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yoka-ipa
+          path: |
+            build/*.ipa
+            build/*.zip
+          if-no-files-found: warn

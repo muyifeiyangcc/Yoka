@@ -8,9 +8,10 @@
 #import "YKNavigationController.h"
 #import "../MainClass/HomeClass/YKHomeViewController.h"
 #import "../MainClass/FindClass/YKFindViewController.h"
-#import "../MainClass/MessageClass/YKMessageViewController.h"
+#import "../MainClass/RelayClass/YKInboxViewController.h"
 #import "../MainClass/MineClass/YKMineViewController.h"
-#import "../MainClass/HomeClass/PublicClass/YKPublicPostViewController.h"
+#import "../MainClass/HomeClass/PublicClass/YKPublicPublishViewController.h"
+#import "YKSigilForge.h"
 
 @interface YKTabBarController () <YKCustomTabBarViewDelegate>
 
@@ -42,7 +43,7 @@
 - (void)yk_setupViewControllers {
     YKHomeViewController *home = [[YKHomeViewController alloc] init];
     YKFindViewController *find = [[YKFindViewController alloc] init];
-    YKMessageViewController *message = [[YKMessageViewController alloc] init];
+    YKInboxViewController *message = [[YKInboxViewController alloc] init];
     YKMineViewController *mine = [[YKMineViewController alloc] init];
 
     self.viewControllers = @[
@@ -55,9 +56,9 @@
                                                 normalImage:@"tab_discover_normal"
                                               selectedImage:@"tab_discover_selected"],
         [self yk_navigationControllerWithRootViewController:message
-                                                      title:@"Message"
-                                                normalImage:@"tab_message_normal"
-                                              selectedImage:@"tab_message_selected"],
+                                                      title:[YKSigilForge yk_unveil:@"EIDKmIiJFebfyrc8Gz4XSg=="]
+                                                normalImage:@"tab_inbox_normal"
+                                              selectedImage:@"tab_inbox_selected"],
         [self yk_navigationControllerWithRootViewController:mine
                                                       title:@"Mine"
                                                 normalImage:@"tab_mine_normal"
@@ -142,7 +143,7 @@
 }
 
 - (void)customTabBarViewDidTapPublish:(YKCustomTabBarView *)tabBarView {
-    YKPublicPostViewController *postViewController = [[YKPublicPostViewController alloc] init];
+    YKPublicPublishViewController *postViewController = [[YKPublicPublishViewController alloc] init];
     UIViewController *selectedViewController = self.selectedViewController;
     if ([selectedViewController isKindOfClass:UINavigationController.class]) {
         [(UINavigationController *)selectedViewController pushViewController:postViewController animated:YES];

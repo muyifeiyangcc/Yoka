@@ -5,7 +5,7 @@
 
 #import "YKBaseViewController.h"
 
-@interface YKBaseViewController ()
+@interface YKBaseViewController () <UIGestureRecognizerDelegate>
 
 @property (nonatomic, strong) UIImageView *backgroundImageView;
 
@@ -16,6 +16,7 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     [self yk_setupBackgroundImageView];
+    [self yk_installDismissKeyboardOnBlankTap];
     [self yk_configurePage];
 }
 
@@ -39,6 +40,29 @@
     ]];
 
     self.backgroundImageView = imageView;
+}
+
+- (void)yk_installDismissKeyboardOnBlankTap {
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(yk_dismissKeyboardFromBlankTap:)];
+    tap.cancelsTouchesInView = NO;
+    tap.delegate = self;
+    [self.view addGestureRecognizer:tap];
+}
+
+- (void)yk_dismissKeyboardFromBlankTap:(UITapGestureRecognizer *)gesture {
+    [self.view endEditing:YES];
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch {
+    UIView *view = touch.view;
+    while (view && view != self.view) {
+        if ([view isKindOfClass:[UIControl class]] ||
+            [view isKindOfClass:[UITextView class]]) {
+            return NO;
+        }
+        view = view.superview;
+    }
+    return YES;
 }
 
 - (UIButton *)yk_addBackButton {
@@ -83,4 +107,3 @@
 }
 
 @end
-

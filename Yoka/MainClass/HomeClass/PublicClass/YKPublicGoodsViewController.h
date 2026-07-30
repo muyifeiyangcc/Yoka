@@ -9,7 +9,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface YKPublicGoodsViewController : YKBaseViewController
 
-@property (nonatomic, copy, nullable) void (^completion)(UIImage *image);
+@property (nonatomic, copy, nullable) void (^completion)(NSDictionary<NSString *, id> *item);
 
 @end
 

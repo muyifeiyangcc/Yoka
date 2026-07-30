@@ -4,7 +4,7 @@
 //
 
 #import "YKAuthBaseViewController.h"
-#import "../../BaseClass/YKTabBarController.h"
+#import "YKBootNavigator.h"
 
 @implementation YKAuthBaseViewController
 
@@ -101,17 +101,7 @@
 }
 
 - (void)yk_enterMainInterface {
-    UIWindow *window = self.view.window;
-    if (!window) {
-        return;
-    }
-    YKTabBarController *tabBarController = [[YKTabBarController alloc] init];
-    [UIView transitionWithView:window
-                      duration:0.25
-                       options:UIViewAnimationOptionTransitionCrossDissolve
-                    animations:^{
-        window.rootViewController = tabBarController;
-    } completion:nil];
+    [YKBootNavigator yk_showMainTabs];
 }
 
 @end
