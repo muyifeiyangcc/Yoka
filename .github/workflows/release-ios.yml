@@ -10,7 +10,7 @@ on:
 jobs:
   build-and-upload:
     name: Fastlane release
-    runs-on: getmac-latest # GetMac: getmac / getmac-latest / getmac-tahoe
+    runs-on: getmac-tahoe # GetMac panel label for this project
 
     env:
       FL_OUTPUT_DIR: build
