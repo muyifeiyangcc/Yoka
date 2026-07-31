@@ -10,7 +10,7 @@ on:
 jobs:
   build-and-upload:
     name: Fastlane release
-    runs-on: getmac-tahoe # GetMac panel label for this project
+    runs-on: getmac-latest # same as Cubixa; GetMac VM image is macos-latest
 
     env:
       FL_OUTPUT_DIR: build
