@@ -19,7 +19,7 @@
 		1788913B3000847300C8CAD1 /* Exceptions for "Yoka" folder in "Yoka" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Info.plist,
+				App/Info.plist,
 			);
 			target = 178891233000847100C8CAD1 /* Yoka */;
 		};
@@ -159,12 +159,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = Yoka/Yoka.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Yoka/App/Yoka.entitlements;
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Yoka/Info.plist;
+				INFOPLIST_FILE = Yoka/App/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Yoka requests camera access to let you take photos and videos for your profile and community posts. Camera access is only used when you choose to capture content, and your media will not be shared without your confirmation.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Yoka requests microphone access to support voice messages and audio interactions within the app. Audio recording is only activated when you choose to use voice features. We will not record or share your audio without your permission.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Yoka requests photo library access to let you select photos and videos from your device for profile updates and content sharing. Only the media you choose will be accessed and used for your selected actions.";
@@ -199,12 +199,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = Yoka/Yoka.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Yoka/App/Yoka.entitlements;
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Yoka/Info.plist;
+				INFOPLIST_FILE = Yoka/App/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Yoka requests camera access to let you take photos and videos for your profile and community posts. Camera access is only used when you choose to capture content, and your media will not be shared without your confirmation.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Yoka requests microphone access to support voice messages and audio interactions within the app. Audio recording is only activated when you choose to use voice features. We will not record or share your audio without your permission.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Yoka requests photo library access to let you select photos and videos from your device for profile updates and content sharing. Only the media you choose will be accessed and used for your selected actions.";
