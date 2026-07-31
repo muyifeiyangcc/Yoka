@@ -6,8 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		17E108C1301C2F8B00F1454B /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 17E108C0301C2F8B00F1454B /* StoreKit.framework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		178891243000847100C8CAD1 /* Yoka.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Yoka.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		17E108C0301C2F8B00F1454B /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -36,6 +41,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				17E108C1301C2F8B00F1454B /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -46,6 +52,7 @@
 			isa = PBXGroup;
 			children = (
 				178891263000847100C8CAD1 /* Yoka */,
+				17E108BF301C2F8B00F1454B /* Frameworks */,
 				178891253000847100C8CAD1 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -56,6 +63,14 @@
 				178891243000847100C8CAD1 /* Yoka.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		17E108BF301C2F8B00F1454B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				17E108C0301C2F8B00F1454B /* StoreKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
