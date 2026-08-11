@@ -11,11 +11,15 @@ AuthKey_*.p8
 # Xcode / build
 build/
 DerivedData/
+DerivedData-*/
 *.xcuserstate
 xcuserdata/
 *.ipa
 *.dSYM.zip
 *.dSYM
+
+# CocoaPods (CI runs pod install)
+Pods/
 
 # Ruby / fastlane
 vendor/bundle/

@@ -1,0 +1,2 @@
+#include "../../Pods/Target Support Files/Pods-Yoka/Pods-Yoka.debug.xcconfig"
+#include "YKHostedContentBase.xcconfig"

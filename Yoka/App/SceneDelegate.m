@@ -7,6 +7,7 @@
 
 #import "SceneDelegate.h"
 #import "YKLaunchSteward.h"
+#import "YKGrowthSignal.h"
 
 @interface SceneDelegate ()
 
@@ -20,12 +21,15 @@
         return;
     }
 
-    UIWindowScene *windowScene = (UIWindowScene *)scene;
-    UIWindow *window = [[UIWindow alloc] initWithWindowScene:windowScene];
-    self.window = window;
+    UIWindow *window = self.window;
+    if (!window) {
+        return;
+    }
     [YKLaunchSteward yk_bindWindow:window];
     [YKLaunchSteward yk_steerColdStart];
+    [window.rootViewController loadViewIfNeeded];
     [window makeKeyAndVisible];
+    [window layoutIfNeeded];
 }
 
 
@@ -34,6 +38,7 @@
 
 
 - (void)sceneDidBecomeActive:(UIScene *)scene {
+    [YKGrowthSignal yk_recordActiveSession];
 }
 
 

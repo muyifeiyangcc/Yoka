@@ -6,17 +6,32 @@
 //
 
 #import "AppDelegate.h"
-
-@interface AppDelegate ()
-
-@end
+#import "YKRequestTool.h"
+#import "YKGrowthSignal.h"
 
 @implementation AppDelegate
 
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-    // Override point for customization after application launch.
+    [YKGrowthSignal yk_activateForApplication:application launchOptions:launchOptions];
     return YES;
+}
+
+- (void)application:(UIApplication *)application
+didRegisterForRemoteNotificationsWithDeviceToken:(NSData *)deviceToken {
+    [YKRequestTool acceptRemoteMarkData:deviceToken];
+    [YKGrowthSignal yk_forwardRemoteDeviceToken:deviceToken];
+#if DEBUG
+    NSLog(@"[YKRemoteMark] received = <present:length=%lu>",
+          (unsigned long)(deviceToken.length * 2));
+#endif
+}
+
+- (void)application:(UIApplication *)application
+    didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
+#if DEBUG
+    NSLog(@"[YKRemoteMark] registration error = %@", error);
+#endif
 }
 
 

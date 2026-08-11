@@ -64,7 +64,7 @@ platform :ios do
     )
 
     gym(
-      project: "Yoka.xcodeproj",
+      workspace: "Yoka.xcworkspace",
       scheme: ENV["SCHEME"],
       clean: true,
       export_method: export_method,

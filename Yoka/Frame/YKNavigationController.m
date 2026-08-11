@@ -31,6 +31,10 @@
     return self.topViewController;
 }
 
+- (UIViewController *)childViewControllerForStatusBarHidden {
+    return self.topViewController;
+}
+
 - (void)navigationController:(UINavigationController *)navigationController willShowViewController:(UIViewController *)viewController animated:(BOOL)animated {
     [navigationController setNavigationBarHidden:YES animated:animated];
     [(YKTabBarController *)navigationController.tabBarController hideSystemTabBarImmediately];

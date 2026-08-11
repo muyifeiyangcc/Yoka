@@ -12,52 +12,49 @@
 
 @implementation YKLaunchSteward
 
-static UIWindow *sYKBootWindow = nil;
+static YKNavigationController *sYKRouteShell = nil;
 
 + (void)yk_bindWindow:(UIWindow *)window {
-    sYKBootWindow = window;
-}
-
-+ (UIWindow *)yk_window {
-    if (sYKBootWindow) {
-        return sYKBootWindow;
-    }
-    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
-        if (![scene isKindOfClass:UIWindowScene.class]) {
-            continue;
-        }
-        for (UIWindow *window in ((UIWindowScene *)scene).windows) {
-            if (window.isKeyWindow) {
-                return window;
-            }
-        }
-    }
-    return nil;
-}
-
-+ (void)yk_swapRoot:(UIViewController *)root {
-    UIWindow *window = [self yk_window];
-    if (!window) {
+    if ([window.rootViewController isKindOfClass:YKNavigationController.class]) {
+        sYKRouteShell = (YKNavigationController *)window.rootViewController;
         return;
     }
-    [UIView transitionWithView:window
+    UIViewController *foundation = window.rootViewController ?: [[UIViewController alloc] init];
+    foundation.view.backgroundColor = UIColor.blackColor;
+    sYKRouteShell = [[YKNavigationController alloc] initWithRootViewController:foundation];
+    [window setRootViewController:sYKRouteShell];
+}
+
++ (void)yk_displayRoute:(UIViewController *)route animated:(BOOL)animated {
+    YKNavigationController *shell = sYKRouteShell;
+    if (!shell || !route) {
+        return;
+    }
+    void (^replaceStack)(void) = ^{
+        [shell setViewControllers:@[route] animated:NO];
+    };
+    if (!animated || shell.view.window == nil) {
+        replaceStack();
+        return;
+    }
+    [UIView transitionWithView:shell.view
                       duration:0.25
-                       options:UIViewAnimationOptionTransitionCrossDissolve
-                    animations:^{
-        window.rootViewController = root;
-    } completion:nil];
+                       options:UIViewAnimationOptionTransitionCrossDissolve | UIViewAnimationOptionAllowAnimatedContent
+                    animations:replaceStack
+                    completion:nil];
 }
 
 + (void)yk_steerColdStart {
     YKRosterVault *vault = YKRosterVault.sharedRoster;
     if (!vault.yk_isPresenceActive) {
-        [self yk_presentLanding];
+        YKLoginChoiceViewController *landing = [[YKLoginChoiceViewController alloc] initForStartupCheck];
+        [self yk_displayRoute:landing animated:NO];
         return;
     }
     if (!vault.yk_isDossierReady) {
         YKProfileInfoViewController *profile = [[YKProfileInfoViewController alloc] init];
         profile.yk_firstPassSetup = YES;
-        [self yk_swapRoot:[[YKNavigationController alloc] initWithRootViewController:profile]];
+        [self yk_displayRoute:profile animated:NO];
         return;
     }
     [self yk_presentMainDeck];
@@ -65,11 +62,11 @@ static UIWindow *sYKBootWindow = nil;
 
 + (void)yk_presentLanding {
     YKLoginChoiceViewController *landing = [[YKLoginChoiceViewController alloc] init];
-    [self yk_swapRoot:[[YKNavigationController alloc] initWithRootViewController:landing]];
+    [self yk_displayRoute:landing animated:YES];
 }
 
 + (void)yk_presentMainDeck {
-    [self yk_swapRoot:[[YKTabBarController alloc] init]];
+    [self yk_displayRoute:[[YKTabBarController alloc] init] animated:YES];
 }
 
 + (void)yk_proceedPastCredentialFrom:(UINavigationController *)navigationController {
@@ -83,7 +80,7 @@ static UIWindow *sYKBootWindow = nil;
     if (navigationController) {
         [navigationController pushViewController:profile animated:YES];
     } else {
-        [self yk_swapRoot:[[YKNavigationController alloc] initWithRootViewController:profile]];
+        [self yk_displayRoute:profile animated:YES];
     }
 }
 

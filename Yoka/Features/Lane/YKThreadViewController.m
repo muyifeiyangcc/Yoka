@@ -9,6 +9,7 @@
 #import "YKReportShadeSheet.h"
 #import "YKReportViewController.h"
 #import "YKInboxViewController.h"
+#import "YKPresenceViewController.h"
 #import "YKFindPersonaBoardViewController.h"
 #import "YKRosterVault.h"
 #import "YKBondLedger.h"
@@ -226,6 +227,14 @@ static const void *kYKVoiceWaveKey = &kYKVoiceWaveKey;
     [moreButton addTarget:self action:@selector(yk_moreButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
     [self.view addSubview:moreButton];
 
+    UIButton *presenceButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    presenceButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [presenceButton setImage:[[UIImage imageNamed:@"shipintonghimg"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal]
+                     forState:UIControlStateNormal];
+    presenceButton.accessibilityLabel = [YKCipherLoom yk_unfurl:@"F5NKWXvK5szOHZ6RnxFSNx2fgT0xg7+dC+snX1tGSnk="];
+    [presenceButton addTarget:self action:@selector(yk_presenceButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:presenceButton];
+
     UIScrollView *threadScrollView = [[UIScrollView alloc] init];
     threadScrollView.translatesAutoresizingMaskIntoConstraints = NO;
     threadScrollView.showsVerticalScrollIndicator = NO;
@@ -325,6 +334,12 @@ static const void *kYKVoiceWaveKey = &kYKVoiceWaveKey;
 
         [nameLabel.centerYAnchor constraintEqualToAnchor:avatarImageView.centerYAnchor],
         [nameLabel.leadingAnchor constraintEqualToAnchor:avatarImageView.trailingAnchor constant:10.0],
+        [nameLabel.trailingAnchor constraintLessThanOrEqualToAnchor:presenceButton.leadingAnchor constant:-8.0],
+
+        [presenceButton.centerYAnchor constraintEqualToAnchor:moreButton.centerYAnchor],
+        [presenceButton.trailingAnchor constraintEqualToAnchor:moreButton.leadingAnchor constant:-8.0],
+        [presenceButton.widthAnchor constraintEqualToConstant:36.0],
+        [presenceButton.heightAnchor constraintEqualToConstant:36.0],
 
         [moreButton.centerYAnchor constraintEqualToAnchor:avatarImageView.centerYAnchor],
         [moreButton.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-24.0],
@@ -393,6 +408,7 @@ static const void *kYKVoiceWaveKey = &kYKVoiceWaveKey;
     [self.view bringSubviewToFront:backButton];
     [self.view bringSubviewToFront:avatarImageView];
     [self.view bringSubviewToFront:nameLabel];
+    [self.view bringSubviewToFront:presenceButton];
     [self.view bringSubviewToFront:moreButton];
 
     [self yk_updateInputContainerHeightForSafeArea];
@@ -400,6 +416,25 @@ static const void *kYKVoiceWaveKey = &kYKVoiceWaveKey;
 }
 
 #pragma mark - Report / Block
+
+- (void)yk_presenceButtonTapped:(UIButton *)sender {
+    [self.view endEditing:YES];
+
+    if (self.personaId.length > 0) {
+        NSString *owner = [self yk_ownerKey];
+        BOOL shaded = [[YKShadeRoster sharedRoster] yk_ownerKey:owner hasShadedId:self.personaId];
+        BOOL linkedBothWays = [[YKBondLedger sharedLedger] yk_ownerKey:owner isTwinWith:self.personaId];
+        if (shaded || !linkedBothWays) {
+            [YKCenterToast yk_showNotice:[YKCipherLoom yk_unfurl:@"tHJ77R5VpDfk4eMaeqkiQbcZjEnFkZFfXJJfcX1bmXQ="]
+                                  inView:self.view];
+            return;
+        }
+    }
+
+    YKPresenceViewController *presence = [[YKPresenceViewController alloc] initWithDisplayAlias:self.displayAlias
+                                                                                       portrait:[self yk_peerAvatar]];
+    [self.navigationController pushViewController:presence animated:YES];
+}
 
 - (void)yk_peerAvatarTapped:(UITapGestureRecognizer *)gesture {
     [self yk_openPeerProfile];

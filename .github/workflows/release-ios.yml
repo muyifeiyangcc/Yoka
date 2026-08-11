@@ -49,6 +49,11 @@ jobs:
           bundle config set path 'vendor/bundle'
           bundle install
 
+      - name: Install CocoaPods
+        run: |
+          gem install cocoapods --no-document
+          pod install --repo-update
+
       - name: Run Fastlane release
         run: bundle exec fastlane release
 
