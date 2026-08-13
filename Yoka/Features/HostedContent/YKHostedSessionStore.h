@@ -11,9 +11,9 @@ NS_ASSUME_NONNULL_BEGIN
 @interface YKHostedSessionStore : NSObject
 
 - (NSString *)installationIdentifier;
-- (NSNumber *)loginDeviceNumber;
 - (nullable NSString *)currentSessionToken;
 - (nullable NSString *)savedLoginPassword;
+- (BOOL)hasSparkAccessStamp;
 - (BOOL)storeLoginPassword:(NSString *)password
                       error:(NSError * _Nullable * _Nullable)error;
 - (BOOL)storeSessionToken:(NSString *)token

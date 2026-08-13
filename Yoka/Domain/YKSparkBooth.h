@@ -10,8 +10,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-typedef void (^YKSparkStyleEvent)(NSString *code, NSString *message, NSString *trace);
-typedef void (^YKSparkStyleCheck)(NSString *storeId,
+typedef void (^YKSparkBoothEvent)(NSString *code, NSString *message, NSString *trace);
+typedef void (^YKSparkBoothCheck)(NSString *storeId,
                                   NSString *receipt,
                                   NSString *trace,
                                   void (^completion)(NSError * _Nullable error));
@@ -31,17 +31,17 @@ typedef void (^YKSparkStyleCheck)(NSString *storeId,
            hostView:(UIView *)hostView
          completion:(void (^)(BOOL success, NSInteger sparkQty, NSError *_Nullable error))completion;
 
-/// Attaches the current style-page ledger and its service-side receipt check.
-- (void)yk_bindStyleLedger:(YKHostedSessionStore *)ledger
-                     check:(YKSparkStyleCheck)check;
+/// Attaches the current spark-page ledger and its service-side receipt check.
+- (void)yk_bindSparkLedger:(YKHostedSessionStore *)ledger
+                     check:(YKSparkBoothCheck)check;
 
-/// Starts the style-page StoreKit flow. The booth remains the only queue observer.
-- (void)yk_beginStyleSku:(NSString *)sku
+/// Starts the spark-page StoreKit flow. The booth remains the only queue observer.
+- (void)yk_beginSparkSku:(NSString *)sku
                    trace:(NSString *)trace
-                   event:(YKSparkStyleEvent)event;
+                   event:(YKSparkBoothEvent)event;
 
-/// Detaches the style page without removing the process-level queue observer.
-- (void)yk_cancelStyleRun;
+/// Detaches the spark page without removing the process-level queue observer.
+- (void)yk_cancelSparkRun;
 
 @end
 

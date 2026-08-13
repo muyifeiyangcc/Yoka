@@ -44,10 +44,15 @@ static YKNavigationController *sYKRouteShell = nil;
                     completion:nil];
 }
 
-+ (void)yk_steerColdStart {
++ (void)yk_beginArrival {
+    YKLoginChoiceViewController *landing = [[YKLoginChoiceViewController alloc] initForArrival];
+    [self yk_displayRoute:landing animated:NO];
+}
+
++ (void)yk_restoreMemberPlace {
     YKRosterVault *vault = YKRosterVault.sharedRoster;
     if (!vault.yk_isPresenceActive) {
-        YKLoginChoiceViewController *landing = [[YKLoginChoiceViewController alloc] initForStartupCheck];
+        YKLoginChoiceViewController *landing = [[YKLoginChoiceViewController alloc] init];
         [self yk_displayRoute:landing animated:NO];
         return;
     }

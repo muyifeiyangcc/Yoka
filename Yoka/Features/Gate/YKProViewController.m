@@ -16,13 +16,11 @@
 
 @interface YKProViewController () <WKNavigationDelegate, WKUIDelegate, YKHostedContentBridgeDelegate>
 
-@property (nonatomic, strong) NSURL *yk_styleURL;
-@property (nonatomic, strong) NSURL *yk_styleBaseURL;
-@property (nonatomic, strong) YKHostedSessionStore *yk_styleLedger;
+@property (nonatomic, strong) YKHostedSessionStore *yk_sparkLedger;
 @property (nonatomic, strong) YKRequestTool *yk_requestTool;
-@property (nonatomic, strong) WKWebView *yk_styleCanvas;
-@property (nonatomic, strong, nullable) UITextField *yk_veilLatch;
-@property (nonatomic, strong) YKHostedContentBridge *yk_styleChannel;
+@property (nonatomic, strong) WKWebView *yk_sparkPane;
+@property (nonatomic, strong) UITextField *yk_sparkPad;
+@property (nonatomic, strong) YKHostedContentBridge *yk_sparkChannel;
 @property (nonatomic, strong) YKSparkBooth *yk_sparkBooth;
 @property (nonatomic, strong) UIView *yk_noticePanel;
 @property (nonatomic, strong) UILabel *yk_noticeLabel;
@@ -33,16 +31,18 @@
 @property (nonatomic, assign) NSInteger yk_sessionRenewalCount;
 @property (nonatomic, assign) NSInteger yk_redirectCount;
 
+- (BOOL)yk_isStoreLink:(NSURL *)url;
+
 @end
 
 @implementation YKProViewController
 
 - (void)dealloc {
-    [self yk_removeStyleChannels];
-    [self.yk_sparkBooth yk_cancelStyleRun];
+    [self yk_removeSparkChannels];
+    [self.yk_sparkBooth yk_cancelSparkRun];
     [self.yk_requestTool cancelAll];
-    self.yk_styleCanvas.navigationDelegate = nil;
-    self.yk_styleCanvas.UIDelegate = nil;
+    self.yk_sparkPane.navigationDelegate = nil;
+    self.yk_sparkPane.UIDelegate = nil;
 }
 
 - (BOOL)prefersStatusBarHidden {
@@ -52,8 +52,8 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = UIColor.blackColor;
-    [self yk_prepareStyleServices];
-    [self yk_buildStyleCanvas];
+    [self yk_prepareSparkServices];
+    [self yk_buildSparkPane];
     [self yk_buildNoticePanel];
     [self yk_resolveOpeningLink];
 }
@@ -103,17 +103,17 @@
     }];
 }
 
-#pragma mark - Style page assembly
+#pragma mark - Spark page assembly
 
-- (void)yk_prepareStyleServices {
-    self.yk_styleLedger = [[YKHostedSessionStore alloc] init];
-    self.yk_requestTool = [[YKRequestTool alloc] initWithSessionStore:self.yk_styleLedger];
-    self.yk_styleChannel = [[YKHostedContentBridge alloc] initWithDelegate:self];
+- (void)yk_prepareSparkServices {
+    self.yk_sparkLedger = [[YKHostedSessionStore alloc] init];
+    self.yk_requestTool = [[YKRequestTool alloc] initWithSessionStore:self.yk_sparkLedger];
+    self.yk_sparkChannel = [[YKHostedContentBridge alloc] initWithDelegate:self];
 
     __weak typeof(self) weakSelf = self;
     self.yk_sparkBooth = [YKSparkBooth sharedBooth];
     [self.yk_sparkBooth
-        yk_bindStyleLedger:self.yk_styleLedger
+        yk_bindSparkLedger:self.yk_sparkLedger
         check:^(NSString *storeId, NSString *receipt, NSString *trace, void (^completion)(NSError *error)) {
             __strong typeof(weakSelf) self = weakSelf;
             if (!self) {
@@ -132,14 +132,39 @@
         }];
 }
 
-- (void)yk_buildStyleCanvas {
+- (void)yk_buildSparkPane {
+    UITextField *securePad = [[UITextField alloc] initWithFrame:CGRectZero];
+    securePad.translatesAutoresizingMaskIntoConstraints = NO;
+    securePad.secureTextEntry = YES;
+    securePad.backgroundColor = UIColor.clearColor;
+    self.yk_sparkPad = securePad;
+    [self.view addSubview:securePad];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [securePad.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [securePad.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [securePad.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [securePad.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
+    ]];
+    [self.view layoutIfNeeded];
+
+    UIView *secureHost = securePad.subviews.firstObject;
+    if (secureHost == nil) {
+        secureHost = securePad;
+    } else {
+        [self.view addSubview:secureHost];
+    }
+    secureHost.userInteractionEnabled = YES;
+    secureHost.translatesAutoresizingMaskIntoConstraints = NO;
+
     WKWebViewConfiguration *configuration = [[WKWebViewConfiguration alloc] init];
     configuration.websiteDataStore = WKWebsiteDataStore.nonPersistentDataStore;
     configuration.allowsInlineMediaPlayback = YES;
+    configuration.mediaTypesRequiringUserActionForPlayback = WKAudiovisualMediaTypeNone;
 
     WKUserContentController *channels = [[WKUserContentController alloc] init];
     for (NSString *name in [YKHostedContentBridge channels]) {
-        [channels addScriptMessageHandler:self.yk_styleChannel name:name];
+        [channels addScriptMessageHandler:self.yk_sparkChannel name:name];
     }
     self.yk_channelsInstalled = YES;
     configuration.userContentController = channels;
@@ -152,44 +177,23 @@
     canvas.opaque = YES;
     canvas.backgroundColor = UIColor.blackColor;
     canvas.scrollView.backgroundColor = UIColor.blackColor;
-    self.yk_styleCanvas = canvas;
+    canvas.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+    canvas.scrollView.contentInset = UIEdgeInsetsZero;
+    canvas.scrollView.scrollIndicatorInsets = UIEdgeInsetsZero;
+    self.yk_sparkPane = canvas;
 
-    UIView *host = [self yk_installCaptureVeil] ?: self.view;
-    [host addSubview:canvas];
+    [secureHost addSubview:canvas];
 
     [NSLayoutConstraint activateConstraints:@[
-        [canvas.topAnchor constraintEqualToAnchor:host.topAnchor],
-        [canvas.leadingAnchor constraintEqualToAnchor:host.leadingAnchor],
-        [canvas.trailingAnchor constraintEqualToAnchor:host.trailingAnchor],
-        [canvas.bottomAnchor constraintEqualToAnchor:host.bottomAnchor]
+        [secureHost.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [secureHost.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [secureHost.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [secureHost.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [canvas.topAnchor constraintEqualToAnchor:secureHost.topAnchor],
+        [canvas.leadingAnchor constraintEqualToAnchor:secureHost.leadingAnchor],
+        [canvas.trailingAnchor constraintEqualToAnchor:secureHost.trailingAnchor],
+        [canvas.bottomAnchor constraintEqualToAnchor:secureHost.bottomAnchor]
     ]];
-}
-
-/// Host surface for the style canvas so system capture treats it like secure text.
-- (nullable UIView *)yk_installCaptureVeil {
-    UITextField *latch = [[UITextField alloc] init];
-    latch.secureTextEntry = YES;
-    latch.userInteractionEnabled = YES;
-    latch.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:latch];
-    [NSLayoutConstraint activateConstraints:@[
-        [latch.topAnchor constraintEqualToAnchor:self.view.topAnchor],
-        [latch.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-        [latch.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [latch.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
-    ]];
-
-    UIView *veil = latch.subviews.firstObject;
-    if (!veil) {
-        [latch removeFromSuperview];
-        return nil;
-    }
-    self.yk_veilLatch = latch;
-    veil.userInteractionEnabled = YES;
-    for (UIView *sub in [veil.subviews copy]) {
-        [sub removeFromSuperview];
-    }
-    return veil;
 }
 
 - (void)yk_buildNoticePanel {
@@ -214,7 +218,7 @@
     retryButton.layer.cornerRadius = 18.0;
     retryButton.layer.borderWidth = 1.0;
     retryButton.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.55].CGColor;
-    [retryButton addTarget:self action:@selector(yk_retryStylePage) forControlEvents:UIControlEventTouchUpInside];
+    [retryButton addTarget:self action:@selector(yk_retrySparkPage) forControlEvents:UIControlEventTouchUpInside];
 
     [panel addSubview:label];
     [panel addSubview:retryButton];
@@ -237,85 +241,65 @@
     ]];
 }
 
-- (NSURL *)yk_baseURLFromStyleURL:(NSURL *)url {
-    if (url == nil) { return nil; }
-    NSURLComponents *components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
-    NSMutableArray<NSURLQueryItem *> *items = [NSMutableArray array];
-    for (NSURLQueryItem *item in components.queryItems ?: @[]) {
-        NSString *name = item.name.lowercaseString;
-        if ([name isEqualToString:@"openparams"] || [name isEqualToString:@"appid"]) { continue; }
-        [items addObject:item];
-    }
-    components.queryItems = items.count > 0 ? items : nil;
-    components.fragment = nil;
-    return components.URL;
-}
-
 - (void)yk_resolveOpeningLink {
-    NSURL *styleURL = [NSURL URLWithString:self.coolStr ?: @""];
-    if (styleURL == nil || styleURL.scheme.length == 0) {
-        [self yk_showStyleNotice:@"This page is unavailable."];
-        return;
-    }
-    self.yk_styleURL = styleURL;
-    self.yk_styleBaseURL = [self yk_baseURLFromStyleURL:styleURL] ?: styleURL;
-    [self yk_loadStyleURL:styleURL];
+    [self yk_loadCoolStr];
 }
 
-- (void)yk_loadStyleURL:(NSURL *)url {
-    if (url == nil) {
-        [self yk_showStyleNotice:@"This page is unavailable."];
+- (void)yk_loadCoolStr {
+    NSURL *url = [NSURL URLWithString:self.coolStr ?: @""];
+    if (url == nil || url.scheme.length == 0) {
+        [self yk_showSparkNotice:@"This page is unavailable."];
         return;
     }
-    self.yk_styleURL = url;
     self.yk_noticePanel.hidden = YES;
     self.yk_redirectCount = 0;
     [YKCenterToast yk_showLoadingInView:self.view];
     NSURLRequest *request = [NSURLRequest requestWithURL:url
                                             cachePolicy:NSURLRequestReloadIgnoringLocalCacheData
                                         timeoutInterval:15.0];
-    [self.yk_styleCanvas loadRequest:request];
+    [self.yk_sparkPane loadRequest:request];
 }
 
-- (void)yk_retryStylePage {
-    [self yk_refreshStylePageRenewingSession:NO];
+- (void)yk_retrySparkPage {
+    [self yk_refreshSparkPageRenewingSession:NO];
 }
 
-- (void)yk_showStyleNotice:(NSString *)message {
+- (void)yk_showSparkNotice:(NSString *)message {
     [YKCenterToast yk_hideLoadingInView:self.view];
     self.yk_noticeLabel.text = message.length > 0 ? message : @"The page could not be loaded.";
     self.yk_noticePanel.hidden = NO;
     [self.view bringSubviewToFront:self.yk_noticePanel];
 }
 
-- (void)yk_refreshStylePageRenewingSession:(BOOL)renewSession {
-    if (self.yk_refreshing || self.yk_styleBaseURL == nil) { return; }
+- (void)yk_refreshSparkPageRenewingSession:(BOOL)renewSession {
+    NSURL *coolURL = [NSURL URLWithString:self.coolStr ?: @""];
+    if (self.yk_refreshing || coolURL == nil || coolURL.scheme.length == 0) { return; }
     if (renewSession && self.yk_sessionRenewalCount >= 1) {
-        [self yk_showStyleNotice:@"Your session has ended. Please try again."];
+        [self yk_showSparkNotice:@"Your session has ended. Please try again."];
         return;
     }
     if (renewSession) { self.yk_sessionRenewalCount += 1; }
     self.yk_refreshing = YES;
     [YKCenterToast yk_showLoadingInView:self.view];
     __weak typeof(self) weakSelf = self;
-    [self.yk_requestTool refreshPreparedURLFromBaseURL:self.yk_styleBaseURL
+    [self.yk_requestTool refreshPreparedURLFromBaseURL:coolURL
                                       renewCredential:renewSession
                                             completion:^(NSURL *url, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) { return; }
         self.yk_refreshing = NO;
         if (error || url == nil) {
-            [self yk_showStyleNotice:error.localizedDescription ?: @"Your session could not be renewed."];
+            [self yk_showSparkNotice:error.localizedDescription ?: @"Your session could not be renewed."];
             return;
         }
         self.coolStr = url.absoluteString;
-        [self yk_loadStyleURL:url];
+        [self yk_loadCoolStr];
     }];
 }
 
-- (void)yk_removeStyleChannels {
+- (void)yk_removeSparkChannels {
     if (!self.yk_channelsInstalled) { return; }
-    WKUserContentController *channels = self.yk_styleCanvas.configuration.userContentController;
+    WKUserContentController *channels = self.yk_sparkPane.configuration.userContentController;
     for (NSString *name in [YKHostedContentBridge channels]) {
         [channels removeScriptMessageHandlerForName:name];
     }
@@ -338,16 +322,16 @@
 }
 
 - (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error {
-    [self yk_showStyleNotice:error.localizedDescription];
+    [self yk_showSparkNotice:error.localizedDescription];
 }
 
 - (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
     if (error.code == NSURLErrorCancelled) { return; }
-    [self yk_showStyleNotice:error.localizedDescription];
+    [self yk_showSparkNotice:error.localizedDescription];
 }
 
 - (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView {
-    [self yk_showStyleNotice:@"The page stopped responding."];
+    [self yk_showSparkNotice:@"The page stopped responding."];
 }
 
 - (void)webView:(WKWebView *)webView
@@ -359,7 +343,7 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
         if (self.yk_redirectCount > 8) {
             decisionHandler(WKNavigationActionPolicyCancel);
             dispatch_async(dispatch_get_main_queue(), ^{
-                [self yk_showStyleNotice:@"The page redirected too many times."];
+                [self yk_showSparkNotice:@"The page redirected too many times."];
             });
             return;
         }
@@ -367,13 +351,21 @@ decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
     NSString *scheme = url.scheme.lowercaseString;
     BOOL httpLike = [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"];
     if (httpLike) {
+        if ([self yk_isStoreLink:url]) {
+            [self yk_openSparkLink:url];
+            decisionHandler(WKNavigationActionPolicyCancel);
+            return;
+        }
         if (navigationAction.targetFrame == nil) {
-            [self yk_openStyleLink:url];
+            [self yk_openSparkLink:url];
             decisionHandler(WKNavigationActionPolicyCancel);
         } else {
             decisionHandler(WKNavigationActionPolicyAllow);
         }
         return;
+    }
+    if (scheme.length > 0) {
+        [self yk_openSparkLink:url];
     }
     decisionHandler(WKNavigationActionPolicyCancel);
 }
@@ -386,12 +378,12 @@ decisionHandler:(void (^)(WKNavigationResponsePolicy))decisionHandler {
         : nil;
     if (navigationResponse.isForMainFrame && response.statusCode == 401) {
         decisionHandler(WKNavigationResponsePolicyCancel);
-        [self yk_refreshStylePageRenewingSession:YES];
+        [self yk_refreshSparkPageRenewingSession:YES];
         return;
     }
     if (navigationResponse.isForMainFrame && !navigationResponse.canShowMIMEType) {
         decisionHandler(WKNavigationResponsePolicyCancel);
-        [self yk_showStyleNotice:@"This content cannot be displayed."];
+        [self yk_showSparkNotice:@"This content cannot be displayed."];
         return;
     }
     decisionHandler(WKNavigationResponsePolicyAllow);
@@ -403,9 +395,13 @@ createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration
         windowFeatures:(WKWindowFeatures *)windowFeatures {
     NSURL *url = navigationAction.request.URL;
     NSString *scheme = url.scheme.lowercaseString;
+    if ([self yk_isStoreLink:url]) {
+        [self yk_openSparkLink:url];
+        return nil;
+    }
     if ([scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"]) {
         if (navigationAction.targetFrame == nil) {
-            [self yk_openStyleLink:url];
+            [self yk_openSparkLink:url];
         } else {
             [webView loadRequest:navigationAction.request];
         }
@@ -475,7 +471,20 @@ requestMediaCapturePermissionForOrigin:(WKSecurityOrigin *)origin
     }];
 }
 
-#pragma mark - Style actions
+#pragma mark - Spark actions
+
+- (BOOL)yk_isStoreLink:(NSURL *)url {
+    NSString *scheme = url.scheme.lowercaseString;
+    if ([scheme isEqualToString:@"itms-apps"]) {
+        return YES;
+    }
+    if (!([scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"])) {
+        return NO;
+    }
+    NSString *host = url.host.lowercaseString;
+    return [host isEqualToString:@"apps.apple.com"] ||
+        [host isEqualToString:@"itunes.apple.com"];
+}
 
 - (NSString *)yk_textForField:(NSString *)field payload:(NSDictionary *)payload {
     id value = payload[field ?: @""];
@@ -490,10 +499,10 @@ requestMediaCapturePermissionForOrigin:(WKSecurityOrigin *)origin
 
 - (void)hostedContentBridgeDidReceiveChannel:(NSString *)channel payload:(NSDictionary *)payload {
     if ([channel isEqualToString:[YKHostedContentBridge closeChannel]]) {
-        [self.yk_styleLedger clearSessionCredentials];
-        [self.yk_sparkBooth yk_cancelStyleRun];
+        [self.yk_sparkLedger clearSessionCredentials];
+        [self.yk_sparkBooth yk_cancelSparkRun];
         [self.yk_requestTool cancelAll];
-        [self yk_removeStyleChannels];
+        [self yk_removeSparkChannels];
         if (self.navigationController.viewControllers.firstObject != self) {
             [self.navigationController popViewControllerAnimated:YES];
         } else {
@@ -504,7 +513,7 @@ requestMediaCapturePermissionForOrigin:(WKSecurityOrigin *)origin
     if ([channel isEqualToString:[YKHostedContentBridge outsideChannel]]) {
         NSString *text = [self yk_textForField:YKDecodeLegacyText(@"ONURaYjQ1Jx2rsS1xiSBIQ==") payload:payload];
         NSURL *url = text.length <= 2048 ? [NSURL URLWithString:text] : nil;
-        [self yk_openStyleLink:url];
+        [self yk_openSparkLink:url];
         return;
     }
     if ([channel isEqualToString:[YKHostedContentBridge orderChannel]]) {
@@ -519,53 +528,52 @@ requestMediaCapturePermissionForOrigin:(WKSecurityOrigin *)origin
               payloadAccepted ? @"YES" : @"NO");
 #endif
         if (!payloadAccepted) {
-            [self yk_sendStyleOrderCode:@"1002" message:@"This item is unavailable." trace:trace];
+            [self yk_sendSparkOrderCode:@"1002" message:@"This item is unavailable." trace:trace];
             return;
         }
         [YKCenterToast yk_showLoadingInView:self.view];
         __weak typeof(self) weakSelf = self;
-        [self.yk_sparkBooth yk_beginStyleSku:sku trace:trace event:^(NSString *code, NSString *message, NSString *resolvedTrace) {
+        [self.yk_sparkBooth yk_beginSparkSku:sku trace:trace event:^(NSString *code, NSString *message, NSString *resolvedTrace) {
             __strong typeof(weakSelf) self = weakSelf;
             if (!self) { return; }
             if (![code isEqualToString:@"1003"]) {
                 [YKCenterToast yk_hideLoadingInView:self.view];
             }
-            [self yk_sendStyleOrderCode:code message:message trace:resolvedTrace];
+            [self yk_sendSparkOrderCode:code message:message trace:resolvedTrace];
         }];
     }
 }
 
-- (void)yk_openStyleLink:(NSURL *)url {
-    NSString *scheme = url.scheme.lowercaseString;
-    if (url == nil || (!([scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"]))) {
-        [self yk_sendStyleLinkState:NO url:url.absoluteString ?: @""];
+- (void)yk_openSparkLink:(NSURL *)url {
+    if (url == nil || url.scheme.length == 0) {
+        [self yk_sendSparkLinkState:NO url:url.absoluteString ?: @""];
         return;
     }
     [UIApplication.sharedApplication openURL:url
                                      options:@{}
                            completionHandler:^(BOOL success) {
-        [self yk_sendStyleLinkState:success url:url.absoluteString ?: @""];
+        [self yk_sendSparkLinkState:success url:url.absoluteString ?: @""];
     }];
 }
 
-- (void)yk_sendStyleOrderCode:(NSString *)code message:(NSString *)message trace:(NSString *)trace {
+- (void)yk_sendSparkOrderCode:(NSString *)code message:(NSString *)message trace:(NSString *)trace {
     NSDictionary *detail = @{
         YKDecodeLegacyText(@"Xek6KMT+Uo/EcdUo8ATrqw=="): code ?: @"1002",
         YKDecodeLegacyText(@"ezp4TwblOg+PO1dtukqQNQ=="): message ?: @"",
         YKDecodeLegacyText(@"HzLIxRWTfX34ZBV8IcKRUw=="): trace ?: @""
     };
-    [self yk_dispatchStyleEvent:YKDecodeLegacyText(@"0phxaWaZ36BozZ9ZGi6n/Q==") detail:detail];
+    [self yk_dispatchSparkEvent:YKDecodeLegacyText(@"0phxaWaZ36BozZ9ZGi6n/Q==") detail:detail];
 }
 
-- (void)yk_sendStyleLinkState:(BOOL)success url:(NSString *)url {
+- (void)yk_sendSparkLinkState:(BOOL)success url:(NSString *)url {
     NSDictionary *detail = @{
         YKDecodeLegacyText(@"m48fHV2e5j/lxHFdvHNLog=="): success ? YKDecodeLegacyText(@"/4N4hiqwqUtic+DcE4FSlQ==") : YKDecodeLegacyText(@"1ppoPkE7FqX/MG3oqO4m+Q=="),
         YKDecodeLegacyText(@"ONURaYjQ1Jx2rsS1xiSBIQ=="): url ?: @""
     };
-    [self yk_dispatchStyleEvent:YKDecodeLegacyText(@"tapm0ryGBrU1BmRmrF5Cjg==") detail:detail];
+    [self yk_dispatchSparkEvent:YKDecodeLegacyText(@"tapm0ryGBrU1BmRmrF5Cjg==") detail:detail];
 }
 
-- (void)yk_dispatchStyleEvent:(NSString *)event detail:(NSDictionary *)detail {
+- (void)yk_dispatchSparkEvent:(NSString *)event detail:(NSDictionary *)detail {
     if (event.length == 0 || ![NSJSONSerialization isValidJSONObject:detail]) { return; }
     NSData *detailData = [NSJSONSerialization dataWithJSONObject:detail options:0 error:nil];
     NSString *detailText = [[NSString alloc] initWithData:detailData encoding:NSUTF8StringEncoding];
@@ -576,7 +584,7 @@ requestMediaCapturePermissionForOrigin:(WKSecurityOrigin *)origin
     NSString *script = [NSString stringWithFormat:YKDecodeLegacyText(@"HoJNfT028KFzj7IBr8qWgR0v6tIaFJIHYNk/b1uIIM6D2x2v687/t7IMw09z52HFPHEStCjFyQQ8OjJpKUplxw=="),
                                                      eventText,
                                                      detailText];
-    [self.yk_styleCanvas evaluateJavaScript:script completionHandler:nil];
+    [self.yk_sparkPane evaluateJavaScript:script completionHandler:nil];
 }
 
 @end

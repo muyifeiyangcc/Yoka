@@ -46,17 +46,17 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
 @property (nonatomic, copy, nullable) NSString *yk_pendingCurrency;
 @property (nonatomic, weak, nullable) UIView *yk_hostView;
 
-@property (nonatomic, strong, nullable) YKHostedSessionStore *yk_styleLedger;
-@property (nonatomic, copy, nullable) YKSparkStyleCheck yk_styleCheck;
-@property (nonatomic, strong, nullable) SKProductsRequest *yk_styleLookup;
-@property (nonatomic, copy, nullable) NSString *yk_styleSku;
-@property (nonatomic, copy, nullable) NSString *yk_styleTrace;
-@property (nonatomic, copy, nullable) NSString *yk_styleMark;
-@property (nonatomic, strong, nullable) NSDecimalNumber *yk_styleAmount;
-@property (nonatomic, copy, nullable) NSString *yk_styleCurrency;
-@property (nonatomic, copy, nullable) YKSparkStyleEvent yk_styleEvent;
+@property (nonatomic, strong, nullable) YKHostedSessionStore *yk_sparkLedger;
+@property (nonatomic, copy, nullable) YKSparkBoothCheck yk_sparkCheck;
+@property (nonatomic, strong, nullable) SKProductsRequest *yk_sparkLookup;
+@property (nonatomic, copy, nullable) NSString *yk_sparkSku;
+@property (nonatomic, copy, nullable) NSString *yk_sparkTrace;
+@property (nonatomic, copy, nullable) NSString *yk_sparkMark;
+@property (nonatomic, strong, nullable) NSDecimalNumber *yk_sparkAmount;
+@property (nonatomic, copy, nullable) NSString *yk_sparkCurrency;
+@property (nonatomic, copy, nullable) YKSparkBoothEvent yk_sparkEvent;
 @property (nonatomic, strong) NSMutableSet<NSString *> *yk_checkedStoreIds;
-@property (nonatomic, assign) BOOL yk_styleSubmitted;
+@property (nonatomic, assign) BOOL yk_sparkSubmitted;
 @property (nonatomic, assign) BOOL yk_observing;
 
 @end
@@ -143,8 +143,8 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
         return;
     }
     BOOL boothBusy = self.yk_pendingCompletion != nil ||
-        self.yk_styleEvent != nil ||
-        self.yk_styleLookup != nil ||
+        self.yk_sparkEvent != nil ||
+        self.yk_sparkLookup != nil ||
         self.yk_checkedStoreIds.count > 0;
     if (boothBusy) {
         if (completion) {
@@ -186,12 +186,12 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
     }
 }
 
-#pragma mark - Style page flow
+#pragma mark - Spark page flow
 
-- (void)yk_bindStyleLedger:(YKHostedSessionStore *)ledger check:(YKSparkStyleCheck)check {
-    [self yk_cancelStyleRun];
-    self.yk_styleLedger = ledger;
-    self.yk_styleCheck = [check copy];
+- (void)yk_bindSparkLedger:(YKHostedSessionStore *)ledger check:(YKSparkBoothCheck)check {
+    [self yk_cancelSparkRun];
+    self.yk_sparkLedger = ledger;
+    self.yk_sparkCheck = [check copy];
 
     NSArray<SKPaymentTransaction *> *waiting = SKPaymentQueue.defaultQueue.transactions;
     if (waiting.count > 0) {
@@ -199,24 +199,24 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
     }
 }
 
-- (void)yk_clearStyleIntent {
-    self.yk_styleEvent = nil;
-    self.yk_styleSku = nil;
-    self.yk_styleTrace = nil;
-    self.yk_styleMark = nil;
-    self.yk_styleAmount = nil;
-    self.yk_styleCurrency = nil;
-    self.yk_styleSubmitted = NO;
+- (void)yk_clearSparkIntent {
+    self.yk_sparkEvent = nil;
+    self.yk_sparkSku = nil;
+    self.yk_sparkTrace = nil;
+    self.yk_sparkMark = nil;
+    self.yk_sparkAmount = nil;
+    self.yk_sparkCurrency = nil;
+    self.yk_sparkSubmitted = NO;
 }
 
-- (void)yk_emitStyleCode:(NSString *)code
+- (void)yk_emitSparkCode:(NSString *)code
                   message:(NSString *)message
                     trace:(NSString *)trace
                  terminal:(BOOL)terminal {
-    BOOL matchesCurrent = trace.length > 0 && [trace isEqualToString:self.yk_styleTrace];
-    YKSparkStyleEvent event = matchesCurrent ? self.yk_styleEvent : nil;
+    BOOL matchesCurrent = trace.length > 0 && [trace isEqualToString:self.yk_sparkTrace];
+    YKSparkBoothEvent event = matchesCurrent ? self.yk_sparkEvent : nil;
     if (terminal && matchesCurrent) {
-        [self yk_clearStyleIntent];
+        [self yk_clearSparkIntent];
     }
     if (event) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -225,10 +225,10 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
     }
 }
 
-- (void)yk_beginStyleSku:(NSString *)sku trace:(NSString *)trace event:(YKSparkStyleEvent)event {
+- (void)yk_beginSparkSku:(NSString *)sku trace:(NSString *)trace event:(YKSparkBoothEvent)event {
     BOOL boothBusy = self.yk_pendingCompletion != nil ||
-        self.yk_styleEvent != nil ||
-        self.yk_styleLookup != nil ||
+        self.yk_sparkEvent != nil ||
+        self.yk_sparkLookup != nil ||
         self.yk_checkedStoreIds.count > 0;
     if (boothBusy) {
 #if DEBUG
@@ -237,7 +237,7 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
         if (event) { event(@"1002", @"Another order is already in progress.", trace ?: @""); }
         return;
     }
-    if (self.yk_styleLedger == nil || self.yk_styleCheck == nil) {
+    if (self.yk_sparkLedger == nil || self.yk_sparkCheck == nil) {
         if (event) { event(@"1002", @"The order could not be confirmed.", trace ?: @""); }
         return;
     }
@@ -256,24 +256,24 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
         return;
     }
 
-    self.yk_styleSku = [sku copy];
-    self.yk_styleTrace = [trace copy];
-    self.yk_styleMark = YKSparkBoothMark(sku, trace);
-    self.yk_styleEvent = [event copy];
-    self.yk_styleSubmitted = NO;
-    [self.yk_styleLedger storePurchaseTrace:trace forProductID:sku];
+    self.yk_sparkSku = [sku copy];
+    self.yk_sparkTrace = [trace copy];
+    self.yk_sparkMark = YKSparkBoothMark(sku, trace);
+    self.yk_sparkEvent = [event copy];
+    self.yk_sparkSubmitted = NO;
+    [self.yk_sparkLedger storePurchaseTrace:trace forProductID:sku];
 
     for (SKPaymentTransaction *entry in SKPaymentQueue.defaultQueue.transactions) {
         if (![entry.payment.productIdentifier isEqualToString:sku]) { continue; }
         NSString *entryMark = entry.payment.applicationUsername ?: @"";
-        if (entryMark.length > 0 && ![entryMark isEqualToString:self.yk_styleMark]) { continue; }
-        self.yk_styleSubmitted = YES;
-        [self yk_handleStyleEntry:entry trace:trace];
+        if (entryMark.length > 0 && ![entryMark isEqualToString:self.yk_sparkMark]) { continue; }
+        self.yk_sparkSubmitted = YES;
+        [self yk_handleSparkEntry:entry trace:trace];
         return;
     }
 
     SKProductsRequest *lookup = [[SKProductsRequest alloc] initWithProductIdentifiers:[NSSet setWithObject:sku]];
-    self.yk_styleLookup = lookup;
+    self.yk_sparkLookup = lookup;
     lookup.delegate = self;
 #if DEBUG
     NSLog(@"[YKStoreFlow] requesting App Store product");
@@ -281,26 +281,26 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
     [lookup start];
 }
 
-- (void)yk_cancelStyleRun {
-    NSString *sku = self.yk_styleSku;
-    YKHostedSessionStore *ledger = self.yk_styleLedger;
-    BOOL keepTrace = self.yk_styleSubmitted;
+- (void)yk_cancelSparkRun {
+    NSString *sku = self.yk_sparkSku;
+    YKHostedSessionStore *ledger = self.yk_sparkLedger;
+    BOOL keepTrace = self.yk_sparkSubmitted;
 
-    self.yk_styleLookup.delegate = nil;
-    [self.yk_styleLookup cancel];
-    self.yk_styleLookup = nil;
+    self.yk_sparkLookup.delegate = nil;
+    [self.yk_sparkLookup cancel];
+    self.yk_sparkLookup = nil;
     if (!keepTrace && sku.length > 0) {
         [ledger removePurchaseTraceForProductID:sku];
     }
-    [self yk_clearStyleIntent];
-    self.yk_styleLedger = nil;
-    self.yk_styleCheck = nil;
+    [self yk_clearSparkIntent];
+    self.yk_sparkLedger = nil;
+    self.yk_sparkCheck = nil;
 }
 
 #pragma mark - Product lookup
 
 - (void)productsRequest:(SKProductsRequest *)request didReceiveResponse:(SKProductsResponse *)response {
-    if (request == self.yk_styleLookup) {
+    if (request == self.yk_sparkLookup) {
 #if DEBUG
         NSLog(@"[YKStoreFlow] product response valid=%lu invalid=%lu",
               (unsigned long)response.products.count,
@@ -308,25 +308,25 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
 #endif
         SKProduct *product = nil;
         for (SKProduct *candidate in response.products) {
-            if ([candidate.productIdentifier isEqualToString:self.yk_styleSku]) {
+            if ([candidate.productIdentifier isEqualToString:self.yk_sparkSku]) {
                 product = candidate;
                 break;
             }
         }
-        self.yk_styleLookup.delegate = nil;
-        self.yk_styleLookup = nil;
+        self.yk_sparkLookup.delegate = nil;
+        self.yk_sparkLookup = nil;
         if (product == nil) {
-            NSString *sku = self.yk_styleSku ?: @"";
-            NSString *trace = self.yk_styleTrace ?: @"";
-            [self.yk_styleLedger removePurchaseTraceForProductID:sku];
-            [self yk_emitStyleCode:@"1002" message:@"This item is unavailable." trace:trace terminal:YES];
+            NSString *sku = self.yk_sparkSku ?: @"";
+            NSString *trace = self.yk_sparkTrace ?: @"";
+            [self.yk_sparkLedger removePurchaseTraceForProductID:sku];
+            [self yk_emitSparkCode:@"1002" message:@"This item is unavailable." trace:trace terminal:YES];
             return;
         }
-        self.yk_styleAmount = product.price;
-        self.yk_styleCurrency = product.priceLocale.currencyCode;
+        self.yk_sparkAmount = product.price;
+        self.yk_sparkCurrency = product.priceLocale.currencyCode;
         SKMutablePayment *storeEntry = [SKMutablePayment paymentWithProduct:product];
-        storeEntry.applicationUsername = self.yk_styleMark;
-        self.yk_styleSubmitted = YES;
+        storeEntry.applicationUsername = self.yk_sparkMark;
+        self.yk_sparkSubmitted = YES;
 #if DEBUG
         NSLog(@"[YKStoreFlow] product resolved; adding StoreKit entry");
 #endif
@@ -362,18 +362,18 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
 }
 
 - (void)request:(SKRequest *)request didFailWithError:(NSError *)error {
-    if (request == self.yk_styleLookup) {
+    if (request == self.yk_sparkLookup) {
 #if DEBUG
         NSLog(@"[YKStoreFlow] product request failed domain=%@ code=%ld",
               error.domain ?: @"",
               (long)error.code);
 #endif
-        NSString *sku = self.yk_styleSku ?: @"";
-        NSString *trace = self.yk_styleTrace ?: @"";
-        self.yk_styleLookup.delegate = nil;
-        self.yk_styleLookup = nil;
-        [self.yk_styleLedger removePurchaseTraceForProductID:sku];
-        [self yk_emitStyleCode:@"1002"
+        NSString *sku = self.yk_sparkSku ?: @"";
+        NSString *trace = self.yk_sparkTrace ?: @"";
+        self.yk_sparkLookup.delegate = nil;
+        self.yk_sparkLookup = nil;
+        [self.yk_sparkLedger removePurchaseTraceForProductID:sku];
+        [self yk_emitSparkCode:@"1002"
                       message:error.localizedDescription ?: @"The item could not be loaded."
                         trace:trace
                      terminal:YES];
@@ -394,19 +394,19 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
     return receipt.length > 0 ? [receipt base64EncodedStringWithOptions:0] : @"";
 }
 
-- (void)yk_confirmStyleEntry:(SKPaymentTransaction *)entry trace:(NSString *)trace {
+- (void)yk_confirmSparkEntry:(SKPaymentTransaction *)entry trace:(NSString *)trace {
     NSString *storeId = entry.transactionIdentifier;
     if (storeId.length == 0) {
         storeId = entry.originalTransaction.transactionIdentifier;
     }
     NSString *receipt = [self yk_receiptText];
     NSString *sku = entry.payment.productIdentifier ?: @"";
-    NSDecimalNumber *amount = self.yk_styleAmount;
-    NSString *currency = self.yk_styleCurrency;
-    YKHostedSessionStore *ledger = self.yk_styleLedger;
-    YKSparkStyleCheck check = self.yk_styleCheck;
+    NSDecimalNumber *amount = self.yk_sparkAmount;
+    NSString *currency = self.yk_sparkCurrency;
+    YKHostedSessionStore *ledger = self.yk_sparkLedger;
+    YKSparkBoothCheck check = self.yk_sparkCheck;
     if (storeId.length == 0 || receipt.length == 0 || trace.length == 0) {
-        [self yk_emitStyleCode:@"1002" message:@"The store receipt is unavailable." trace:trace terminal:YES];
+        [self yk_emitSparkCode:@"1002" message:@"The store receipt is unavailable." trace:trace terminal:YES];
         return;
     }
     if ([self.yk_checkedStoreIds containsObject:storeId]) {
@@ -415,7 +415,7 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
     [self.yk_checkedStoreIds addObject:storeId];
     if (ledger == nil || check == nil) {
         [self.yk_checkedStoreIds removeObject:storeId];
-        [self yk_emitStyleCode:@"1002" message:@"The order could not be confirmed." trace:trace terminal:YES];
+        [self yk_emitSparkCode:@"1002" message:@"The order could not be confirmed." trace:trace terminal:YES];
         return;
     }
 
@@ -426,7 +426,7 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
             if (!self) { return; }
             if (error) {
                 [self.yk_checkedStoreIds removeObject:storeId];
-                [self yk_emitStyleCode:@"1002"
+                [self yk_emitSparkCode:@"1002"
                               message:error.localizedDescription ?: @"The order could not be confirmed."
                                 trace:trace
                              terminal:YES];
@@ -441,12 +441,12 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
             [[SKPaymentQueue defaultQueue] finishTransaction:entry];
             [ledger removePurchaseTraceForProductID:sku];
             [self.yk_checkedStoreIds removeObject:storeId];
-            [self yk_emitStyleCode:@"0000" message:@"" trace:trace terminal:YES];
+            [self yk_emitSparkCode:@"0000" message:@"" trace:trace terminal:YES];
         });
     });
 }
 
-- (void)yk_handleStyleEntry:(SKPaymentTransaction *)entry trace:(NSString *)trace {
+- (void)yk_handleSparkEntry:(SKPaymentTransaction *)entry trace:(NSString *)trace {
 #if DEBUG
     NSLog(@"[YKStoreFlow] transaction state=%ld", (long)entry.transactionState);
 #endif
@@ -454,18 +454,18 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
         case SKPaymentTransactionStatePurchasing:
             break;
         case SKPaymentTransactionStateDeferred:
-            [self yk_emitStyleCode:@"1003" message:@"The order is pending approval." trace:trace terminal:NO];
+            [self yk_emitSparkCode:@"1003" message:@"The order is pending approval." trace:trace terminal:NO];
             break;
         case SKPaymentTransactionStatePurchased:
         case SKPaymentTransactionStateRestored:
-            [self yk_confirmStyleEntry:entry trace:trace];
+            [self yk_confirmSparkEntry:entry trace:trace];
             break;
         case SKPaymentTransactionStateFailed: {
             NSError *failure = entry.error;
             BOOL cancelled = [failure.domain isEqualToString:SKErrorDomain] && failure.code == SKErrorPaymentCancelled;
             [[SKPaymentQueue defaultQueue] finishTransaction:entry];
-            [self.yk_styleLedger removePurchaseTraceForProductID:entry.payment.productIdentifier ?: @""];
-            [self yk_emitStyleCode:cancelled ? @"1001" : @"1002"
+            [self.yk_sparkLedger removePurchaseTraceForProductID:entry.payment.productIdentifier ?: @""];
+            [self yk_emitSparkCode:cancelled ? @"1001" : @"1002"
                           message:cancelled ? @"" : (failure.localizedDescription ?: @"The order failed.")
                             trace:trace
                          terminal:YES];
@@ -521,22 +521,22 @@ static NSString *YKSparkBoothMark(NSString *sku, NSString *reference) {
             self.yk_pendingMark.length > 0 &&
             [entryMark isEqualToString:self.yk_pendingMark];
 
-        NSString *trace = [self.yk_styleLedger purchaseTraceForProductID:sku] ?: @"";
-        NSString *styleMark = trace.length > 0 ? YKSparkBoothMark(sku, trace) : @"";
-        BOOL exactStyle = trace.length > 0 &&
+        NSString *trace = [self.yk_sparkLedger purchaseTraceForProductID:sku] ?: @"";
+        NSString *resolvedMark = trace.length > 0 ? YKSparkBoothMark(sku, trace) : @"";
+        BOOL exactSpark = trace.length > 0 &&
             entryMark.length > 0 &&
-            [entryMark isEqualToString:styleMark];
-        BOOL legacyStyle = trace.length > 0 && entryMark.length == 0 && !localCurrent;
-        BOOL styleCurrent = trace.length > 0 &&
-            [sku isEqualToString:self.yk_styleSku] &&
-            (entryMark.length == 0 || exactStyle);
+            [entryMark isEqualToString:resolvedMark];
+        BOOL legacySpark = trace.length > 0 && entryMark.length == 0 && !localCurrent;
+        BOOL sparkCurrent = trace.length > 0 &&
+            [sku isEqualToString:self.yk_sparkSku] &&
+            (entryMark.length == 0 || exactSpark);
 
         if (exactLocal) {
             [self yk_handleLocalEntry:entry pack:pack];
             continue;
         }
-        if (exactStyle || legacyStyle || styleCurrent) {
-            [self yk_handleStyleEntry:entry trace:trace.length > 0 ? trace : self.yk_styleTrace];
+        if (exactSpark || legacySpark || sparkCurrent) {
+            [self yk_handleSparkEntry:entry trace:trace.length > 0 ? trace : self.yk_sparkTrace];
             continue;
         }
         if (localCurrent && (entryMark.length == 0 || self.yk_pendingMark.length == 0)) {

@@ -26,7 +26,7 @@
         return;
     }
     [YKLaunchSteward yk_bindWindow:window];
-    [YKLaunchSteward yk_steerColdStart];
+    [YKLaunchSteward yk_beginArrival];
     [window.rootViewController loadViewIfNeeded];
     [window makeKeyAndVisible];
     [window layoutIfNeeded];

@@ -10,7 +10,8 @@ NS_ASSUME_NONNULL_BEGIN
 @interface YKLaunchSteward : NSObject
 
 + (void)yk_bindWindow:(UIWindow *)window;
-+ (void)yk_steerColdStart;
++ (void)yk_beginArrival;
++ (void)yk_restoreMemberPlace;
 + (void)yk_presentLanding;
 + (void)yk_presentMainDeck;
 + (void)yk_proceedPastCredentialFrom:(nullable UINavigationController *)navigationController;

@@ -16,7 +16,7 @@
 #import "YKHostedSessionStore.h"
 #import "YKRequestTool.h"
 #import <AuthenticationServices/AuthenticationServices.h>
-#import <math.h>
+#import <CoreTelephony/CTCellularData.h>
 #import <string.h>
 
 typedef NS_ENUM(NSInteger, YKLandingState) {
@@ -24,17 +24,16 @@ typedef NS_ENUM(NSInteger, YKLandingState) {
     YKLandingStateChecking,
     YKLandingStateFocused,
     YKLandingStateSigningIn,
-    YKLandingStateStyleSpace,
+    YKLandingStateSparkRoom,
     YKLandingStateStopped
 };
 
 typedef NS_ENUM(NSInteger, YKLandingTarget) {
     YKLandingTargetNone = 0,
     YKLandingTargetStandard,
-    YKLandingTargetFocused
+    YKLandingTargetFocused,
+    YKLandingTargetSparkRoom
 };
-
-static NSString *const YKUseTextStr = @"1787068800";
 
 @interface YKLoginChoiceViewController () <UITextViewDelegate, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding>
 
@@ -50,27 +49,34 @@ static NSString *const YKUseTextStr = @"1787068800";
 @property (nonatomic, strong) NSLayoutConstraint *yk_logoHeightConstraint;
 @property (nonatomic, strong) UIButton *yk_focusedLoginButton;
 
-@property (nonatomic, assign) BOOL yk_usesStartupCheck;
-@property (nonatomic, assign) BOOL yk_startupCheckBegan;
+@property (nonatomic, assign) BOOL yk_handlesArrival;
+@property (nonatomic, assign) BOOL yk_arrivalBegan;
 @property (nonatomic, assign) YKLandingState yk_landingState;
 @property (nonatomic, assign) YKLandingTarget yk_pendingTarget;
-@property (nonatomic, strong) YKHostedSessionStore *yk_styleLedger;
+@property (nonatomic, strong) YKHostedSessionStore *yk_sparkLedger;
 @property (nonatomic, strong) YKRequestTool *yk_requestTool;
-@property (nonatomic, strong, nullable) NSURL *yk_styleBaseURL;
+@property (nonatomic, strong, nullable) NSURL *yk_sparkBaseURL;
 @property (nonatomic, strong, nullable) UIViewController *yk_launchCanvasController;
-@property (nonatomic, strong, nullable) UIView *yk_launchCanvasView;
+@property (nonatomic, strong, nullable) UIView *loginWinView;
+@property (nonatomic, strong, nullable) CTCellularData *yk_networkAccessState;
+@property (nonatomic, assign) BOOL yk_openRequestRunning;
+@property (nonatomic, assign) BOOL yk_openRequestRetriedAfterAccess;
+@property (nonatomic, assign) BOOL yk_openRetryScheduled;
+@property (nonatomic, assign) YKLandingTarget yk_resolvedTarget;
+
+- (void)yk_scheduleOpeningRetryAfterAccess;
 
 @end
 
 @implementation YKLoginChoiceViewController
 
-- (instancetype)initForStartupCheck {
+- (instancetype)initForArrival {
     self = [super init];
     if (self) {
-        _yk_usesStartupCheck = YES;
+        _yk_handlesArrival = YES;
         _yk_landingState = YKLandingStateChecking;
-        _yk_styleLedger = [[YKHostedSessionStore alloc] init];
-        _yk_requestTool = [[YKRequestTool alloc] initWithSessionStore:_yk_styleLedger];
+        _yk_sparkLedger = [[YKHostedSessionStore alloc] init];
+        _yk_requestTool = [[YKRequestTool alloc] initWithSessionStore:_yk_sparkLedger];
     }
     return self;
 }
@@ -84,7 +90,7 @@ static NSString *const YKUseTextStr = @"1787068800";
     [super yk_configurePage];
     self.yk_sessionAgreeChecked = NO;
     [self yk_setupViews];
-    if (self.yk_usesStartupCheck) {
+    if (self.yk_handlesArrival) {
         [self yk_installLaunchCanvas];
         [NSNotificationCenter.defaultCenter addObserver:self
                                                selector:@selector(yk_applicationBecameActive:)
@@ -95,8 +101,8 @@ static NSString *const YKUseTextStr = @"1787068800";
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    if (self.yk_landingState == YKLandingStateStyleSpace) {
-        self.yk_landingState = YKLandingStateFocused;
+    if (self.yk_landingState == YKLandingStateSparkRoom) {
+        [self yk_showFocusedLogin];
         self.yk_focusedLoginButton.enabled = YES;
         self.yk_focusedLoginButton.alpha = 1.0;
     }
@@ -112,13 +118,14 @@ static NSString *const YKUseTextStr = @"1787068800";
 - (void)dealloc {
     [NSNotificationCenter.defaultCenter removeObserver:self];
     [self.yk_requestTool cancelAll];
-    [self.yk_launchCanvasView removeFromSuperview];
+    self.yk_networkAccessState.cellularDataRestrictionDidUpdateNotifier = nil;
+    [self.loginWinView removeFromSuperview];
 }
 
 #pragma mark - Initial landing
 
 - (void)yk_installLaunchCanvas {
-    if (self.yk_launchCanvasView) {
+    if (self.loginWinView) {
         return;
     }
     UIStoryboard *storyboard = [UIStoryboard storyboardWithName:@"LaunchScreen" bundle:NSBundle.mainBundle];
@@ -132,12 +139,12 @@ static NSString *const YKUseTextStr = @"1787068800";
     canvas.frame = self.view.bounds;
     canvas.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.yk_launchCanvasController = controller;
-    self.yk_launchCanvasView = canvas;
+    self.loginWinView = canvas;
     [self.view addSubview:canvas];
 }
 
 - (void)yk_raiseLaunchCanvas {
-    UIView *canvas = self.yk_launchCanvasView;
+    UIView *canvas = self.loginWinView;
     if (!canvas) {
         return;
     }
@@ -156,60 +163,152 @@ static NSString *const YKUseTextStr = @"1787068800";
 }
 
 - (void)yk_removeLaunchCanvas {
-    [self.yk_launchCanvasView removeFromSuperview];
-    self.yk_launchCanvasView = nil;
+    [self.loginWinView removeFromSuperview];
+    self.loginWinView = nil;
     self.yk_launchCanvasController = nil;
 }
 
 - (void)yk_applicationBecameActive:(NSNotification *)notification {
     [self yk_raiseLaunchCanvas];
     [self yk_applyPendingLandingTarget];
-}
-
-- (BOOL)yk_userUsageTimeAllowsRequest {
-    NSScanner *scanner = [NSScanner scannerWithString:YKUseTextStr];
-    scanner.charactersToBeSkipped = nil;
-    long long startSeconds = 0;
-    if (![scanner scanLongLong:&startSeconds] || !scanner.isAtEnd || startSeconds <= 0) {
-        return NO;
+    if (self.yk_landingState == YKLandingStateChecking) {
+        [self yk_networkAccessDidChange:self.yk_networkAccessState.restrictedState];
     }
-    NSTimeInterval now = NSDate.date.timeIntervalSince1970;
-    return isfinite(now) && now >= (NSTimeInterval)startSeconds;
 }
 
 - (void)yk_prepareInitialLanding {
-    if (!self.yk_usesStartupCheck || self.yk_startupCheckBegan) {
+    if (!self.yk_handlesArrival || self.yk_arrivalBegan) {
         return;
     }
-    self.yk_startupCheckBegan = YES;
-
-    if (!self.yk_requestTool.isReady || ![self yk_userUsageTimeAllowsRequest]) {
-        [self yk_scheduleLandingTarget:YKLandingTargetStandard];
-        return;
-    }
-
+    self.yk_arrivalBegan = YES;
     self.yk_landingState = YKLandingStateChecking;
+    [self yk_observeNetworkAccess];
+
+    if (!self.yk_requestTool.isReady) {
+        [self yk_finishOpeningTarget:YKLandingTargetStandard];
+        return;
+    }
+
+    [self yk_requestOpeningState];
+}
+
+- (void)yk_observeNetworkAccess {
+    if (self.yk_networkAccessState) {
+        return;
+    }
+    CTCellularData *accessState = [[CTCellularData alloc] init];
+    self.yk_networkAccessState = accessState;
+    __weak typeof(self) weakSelf = self;
+    accessState.cellularDataRestrictionDidUpdateNotifier = ^(CTCellularDataRestrictedState state) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self yk_networkAccessDidChange:state];
+        });
+    };
+}
+
+- (void)yk_networkAccessDidChange:(CTCellularDataRestrictedState)state {
+    if (!self || self.yk_landingState != YKLandingStateChecking) {
+        return;
+    }
+    if (state == kCTCellularDataRestrictedStateUnknown) {
+        return;
+    }
+    if (self.yk_resolvedTarget != YKLandingTargetNone) {
+        YKLandingTarget target = self.yk_resolvedTarget;
+        self.yk_resolvedTarget = YKLandingTargetNone;
+        [self yk_scheduleLandingTarget:target];
+        return;
+    }
+    if (!self.yk_openRequestRunning) {
+        [self yk_scheduleOpeningRetryAfterAccess];
+    }
+}
+
+- (void)yk_scheduleOpeningRetryAfterAccess {
+    if (self.yk_landingState != YKLandingStateChecking ||
+        self.yk_resolvedTarget != YKLandingTargetNone ||
+        self.yk_openRequestRunning ||
+        self.yk_openRequestRetriedAfterAccess ||
+        self.yk_openRetryScheduled ||
+        self.yk_networkAccessState.restrictedState == kCTCellularDataRestrictedStateUnknown) {
+        return;
+    }
+
+    self.yk_openRetryScheduled = YES;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        self.yk_openRetryScheduled = NO;
+        if (self.yk_landingState != YKLandingStateChecking ||
+            self.yk_resolvedTarget != YKLandingTargetNone ||
+            self.yk_openRequestRunning ||
+            self.yk_openRequestRetriedAfterAccess ||
+            self.yk_networkAccessState.restrictedState == kCTCellularDataRestrictedStateUnknown) {
+            return;
+        }
+        self.yk_openRequestRetriedAfterAccess = YES;
+        [self yk_requestOpeningState];
+    });
+}
+
+- (void)yk_requestOpeningState {
+    if (self.yk_openRequestRunning || self.yk_landingState != YKLandingStateChecking) {
+        return;
+    }
+    CTCellularDataRestrictedState accessState = self.yk_networkAccessState.restrictedState;
+
+    self.yk_openRequestRunning = YES;
+    BOOL requestBeganUndecided = accessState == kCTCellularDataRestrictedStateUnknown;
     __weak typeof(self) weakSelf = self;
     [self.yk_requestTool loginGoodWithCompletion:^(NSString *openValue, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self || self.yk_landingState != YKLandingStateChecking) {
             return;
         }
+        self.yk_openRequestRunning = NO;
+        CTCellularDataRestrictedState currentAccess = self.yk_networkAccessState.restrictedState;
         if (error || openValue.length == 0) {
+            // A failure while the system choice is unresolved is provisional.
+            // Keep the launch canvas visible and retry once after the network
+            // path has had a moment to settle.
+            if (currentAccess == kCTCellularDataRestrictedStateUnknown) {
+                return;
+            }
+            if (requestBeganUndecided &&
+                !self.yk_openRequestRetriedAfterAccess) {
+                [self yk_scheduleOpeningRetryAfterAccess];
+                return;
+            }
             [self yk_scheduleLandingTarget:YKLandingTargetStandard];
             return;
         }
         NSString *trimmed = [openValue stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-        self.yk_styleBaseURL = [NSURL URLWithString:trimmed];
-        if (self.yk_styleBaseURL == nil) {
-            [self yk_scheduleLandingTarget:YKLandingTargetStandard];
+        self.yk_sparkBaseURL = [NSURL URLWithString:trimmed];
+        if (self.yk_sparkBaseURL == nil) {
+            [self yk_finishOpeningTarget:YKLandingTargetStandard];
             return;
         }
-        [self yk_scheduleLandingTarget:YKLandingTargetFocused];
+        BOOL canResumeSparkRoom = self.yk_sparkLedger.hasSparkAccessStamp &&
+            self.yk_sparkLedger.currentSessionToken.length > 0;
+        YKLandingTarget target = canResumeSparkRoom
+            ? YKLandingTargetSparkRoom
+            : YKLandingTargetFocused;
+        [self yk_finishOpeningTarget:target];
     }];
 }
 
+- (void)yk_finishOpeningTarget:(YKLandingTarget)target {
+    CTCellularDataRestrictedState accessState = self.yk_networkAccessState.restrictedState;
+    if (accessState == kCTCellularDataRestrictedStateUnknown) {
+        self.yk_resolvedTarget = target;
+        return;
+    }
+    [self yk_scheduleLandingTarget:target];
+}
+
 - (void)yk_scheduleLandingTarget:(YKLandingTarget)target {
+    self.yk_networkAccessState.cellularDataRestrictionDidUpdateNotifier = nil;
+    self.yk_networkAccessState = nil;
     self.yk_pendingTarget = target;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [self yk_applyPendingLandingTarget];
@@ -226,11 +325,21 @@ static NSString *const YKUseTextStr = @"1787068800";
     self.yk_pendingTarget = YKLandingTargetNone;
     switch (target) {
         case YKLandingTargetStandard:
-            self.yk_landingState = YKLandingStateStandard;
-            [self yk_removeLaunchCanvas];
+            if (YKRosterVault.sharedRoster.yk_isPresenceActive) {
+                self.yk_landingState = YKLandingStateStopped;
+                [YKLaunchSteward yk_restoreMemberPlace];
+                [self.navigationController.view.window layoutIfNeeded];
+                [self yk_removeLaunchCanvas];
+            } else {
+                self.yk_landingState = YKLandingStateStandard;
+                [self yk_removeLaunchCanvas];
+            }
             break;
         case YKLandingTargetFocused:
             [self yk_showFocusedLogin];
+            break;
+        case YKLandingTargetSparkRoom:
+            [self yk_presentSparkRoom];
             break;
         case YKLandingTargetNone:
             break;
@@ -271,9 +380,9 @@ static NSString *const YKUseTextStr = @"1787068800";
     [self yk_removeLaunchCanvas];
 }
 
-- (void)yk_presentStyleSpace {
+- (void)yk_presentSparkRoom {
     NSError *urlError = nil;
-    NSURL *url = [self.yk_requestTool preparedURLFromBaseURL:self.yk_styleBaseURL
+    NSURL *url = [self.yk_requestTool preparedURLFromBaseURL:self.yk_sparkBaseURL
                                                       error:&urlError];
     UINavigationController *navigationController = self.navigationController;
     if (!url || !navigationController) {
@@ -281,10 +390,17 @@ static NSString *const YKUseTextStr = @"1787068800";
         return;
     }
 
-    YKProViewController *stylePage = [[YKProViewController alloc] init];
-    stylePage.coolStr = url.absoluteString;
-    self.yk_landingState = YKLandingStateStyleSpace;
-    [navigationController pushViewController:stylePage animated:YES];
+    YKProViewController *sparkPage = [[YKProViewController alloc] init];
+    sparkPage.coolStr = url.absoluteString;
+    self.yk_landingState = YKLandingStateSparkRoom;
+    BOOL startupCanvasVisible = self.loginWinView != nil;
+    [navigationController pushViewController:sparkPage animated:!startupCanvasVisible];
+    if (startupCanvasVisible) {
+        [sparkPage.view setNeedsLayout];
+        [sparkPage.view layoutIfNeeded];
+        [self yk_raiseLaunchCanvas];
+        [self yk_removeLaunchCanvas];
+    }
 }
 
 - (void)viewDidLayoutSubviews {
@@ -411,7 +527,7 @@ static NSString *const YKUseTextStr = @"1787068800";
         if (!self || self.yk_landingState != YKLandingStateSigningIn) {
             return;
         }
-        if (error || ticket.length == 0 || self.yk_styleBaseURL == nil) {
+        if (error || ticket.length == 0 || self.yk_sparkBaseURL == nil) {
             self.yk_landingState = YKLandingStateFocused;
             sender.enabled = YES;
             sender.alpha = 1.0;
@@ -419,7 +535,7 @@ static NSString *const YKUseTextStr = @"1787068800";
                                    inView:self.view];
             return;
         }
-        [self yk_presentStyleSpace];
+        [self yk_presentSparkRoom];
     }];
 }
 

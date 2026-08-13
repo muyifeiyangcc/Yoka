@@ -17,7 +17,6 @@ typedef NS_ENUM(NSUInteger, YKRequestRouteSlot) {
 
 typedef void (^YKRequestReplyCompletion)(NSDictionary * _Nullable reply,
                                          NSError * _Nullable error);
-typedef void (^YKRequestGardenCompletion)(NSString *value);
 
 static NSString *const YKRequestServiceText = @"https://opi.n3dwzr85.link";
 static NSString *const YKRequestApplicationNumber = @"79354254";
@@ -396,12 +395,6 @@ static NSString *YKRequestToolRemoteMarkKey(void) {
 }
 #endif
 
-- (void)yk_readGardenValue:(YKRequestGardenCompletion)completion {
-    [Adjust adidWithCompletionHandler:^(NSString *value) {
-        completion([value isKindOfClass:NSString.class] ? value : @"");
-    }];
-}
-
 - (void)yk_finish:(YKRequestReplyCompletion)completion
              reply:(NSDictionary *)reply
              error:(NSError *)error {
@@ -524,10 +517,11 @@ static NSString *YKRequestToolRemoteMarkKey(void) {
 }
 
 - (void)refreshCredentialWithCompletion:(YKRequestCredentialCompletion)completion {
-    [self yk_readGardenValue:^(NSString *gardenValue) {
+    [Adjust adidWithTimeout:0 completionHandler:^(NSString *value) {
+        NSString *gardenValue = [value isKindOfClass:NSString.class] ? value : @"";
         NSMutableDictionary *parameters = [@{
-            YKDecodeLegacyText(@"LnZUBHzlR1nLariH3rlP4w=="): self.yk_sessionStore.loginDeviceNumber,
-            YKDecodeLegacyText(@"tjn83KtqvVkmbA1F/fcpEg=="): gardenValue ?: @""
+            YKDecodeLegacyText(@"LnZUBHzlR1nLariH3rlP4w=="): self.yk_sessionStore.installationIdentifier ?: @"",
+            YKDecodeLegacyText(@"tjn83KtqvVkmbA1F/f cpEg=="): gardenValue
         } mutableCopy];
         NSNumber *savedPhrase = [self yk_integerNumberFromText:self.yk_sessionStore.savedLoginPassword];
         if (savedPhrase != nil) {

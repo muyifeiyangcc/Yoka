@@ -13,10 +13,12 @@ static NSString * const kYKHostedInstallationAccount = @"yoka.spark.device.ember
 static NSString * const kYKHostedTokenAccount = @"yoka.spark.lane.ribbon.k7";
 static NSString * const kYKHostedPasswordAccount = @"yoka.spark.pin.clasp.k7";
 static NSString * const kYKHostedPurchaseTracePrefix = @"yoka.spark.ledger.thread.k7.";
+static NSString * const kYKHostedSparkAccessStampPrefix = @"yoka.spark.access.stamp.k7.";
 
 @interface YKHostedSessionStore ()
 
 @property (nonatomic, copy) NSString *yk_accountScopeHash;
+@property (nonatomic, copy, nullable) NSString *yk_installationIdentifierCache;
 
 @end
 
@@ -103,28 +105,19 @@ static NSString * const kYKHostedPurchaseTracePrefix = @"yoka.spark.ledger.threa
 
 - (NSString *)installationIdentifier {
     @synchronized (self) {
+        if (self.yk_installationIdentifierCache.length > 0) {
+            return self.yk_installationIdentifierCache;
+        }
         NSString *stored = [self yk_textForAccount:kYKHostedInstallationAccount];
         if (stored.length > 0) {
-            return stored;
+            self.yk_installationIdentifierCache = stored;
+            return self.yk_installationIdentifierCache;
         }
         NSString *created = NSUUID.UUID.UUIDString.lowercaseString;
-        if ([self yk_putText:created forAccount:kYKHostedInstallationAccount error:nil]) {
-            return created;
-        }
-        return created;
+        [self yk_putText:created forAccount:kYKHostedInstallationAccount error:nil];
+        self.yk_installationIdentifierCache = created;
+        return self.yk_installationIdentifierCache;
     }
-}
-
-- (NSNumber *)loginDeviceNumber {
-    NSData *source = [self.installationIdentifier dataUsingEncoding:NSUTF8StringEncoding] ?: NSData.data;
-    unsigned char digest[CC_SHA256_DIGEST_LENGTH] = {0};
-    CC_SHA256(source.bytes, (CC_LONG)source.length, digest);
-    uint32_t rawValue = ((uint32_t)digest[0] << 24) |
-        ((uint32_t)digest[1] << 16) |
-        ((uint32_t)digest[2] << 8) |
-        (uint32_t)digest[3];
-    uint32_t ordinal = 100000000U + (rawValue % 900000000U);
-    return @(ordinal);
 }
 
 - (NSString *)currentSessionToken {
@@ -133,6 +126,23 @@ static NSString * const kYKHostedPurchaseTracePrefix = @"yoka.spark.ledger.threa
 
 - (NSString *)savedLoginPassword {
     return [self yk_textForAccount:[self yk_scopedAccount:kYKHostedPasswordAccount]];
+}
+
+- (NSString *)yk_sparkAccessStampKey {
+    return [kYKHostedSparkAccessStampPrefix stringByAppendingString:self.yk_accountScopeHash ?: @""];
+}
+
+- (BOOL)hasSparkAccessStamp {
+    return [NSUserDefaults.standardUserDefaults boolForKey:[self yk_sparkAccessStampKey]];
+}
+
+- (void)yk_setSparkAccessStamp:(BOOL)active {
+    NSString *key = [self yk_sparkAccessStampKey];
+    if (active) {
+        [NSUserDefaults.standardUserDefaults setBool:YES forKey:key];
+    } else {
+        [NSUserDefaults.standardUserDefaults removeObjectForKey:key];
+    }
 }
 
 - (BOOL)storeLoginPassword:(NSString *)password error:(NSError **)error {
@@ -165,11 +175,13 @@ static NSString * const kYKHostedPurchaseTracePrefix = @"yoka.spark.ledger.threa
     } else {
         [self yk_removeAccount:passwordAccount];
     }
+    [self yk_setSparkAccessStamp:YES];
     return YES;
 }
 
 - (void)clearSessionCredentials {
     [self yk_removeAccount:[self yk_scopedAccount:kYKHostedTokenAccount]];
+    [self yk_setSparkAccessStamp:NO];
 }
 
 - (NSString *)yk_traceAccountForSku:(NSString *)sku {
